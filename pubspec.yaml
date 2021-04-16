@@ -1,0 +1,43 @@
+name: nekoton
+description: The simplest TON wallet
+
+publish_to: 'none'
+
+version: 1.0.0+1
+
+environment:
+  sdk: ">=2.12.0 <3.0.0"
+
+dependencies:
+  ffi: ^1.0.0
+  ffigen: ^2.4.2
+  flutter:
+    sdk: flutter
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+
+flutter:
+  uses-material-design: true
+
+  fonts:
+    - family: PT Root UI
+      fonts:
+        - asset: fonts/PT-Root-UI-Regular.ttf
+        - asset: fonts/PT-Root-UI-Medium.ttf
+          weight: 500
+        - asset: fonts/PT-Root-UI-Regular.ttf
+          weight: 700
+
+ffigen:
+  output: lib/bindings.dart
+  headers:
+    entry-points:
+      - core/target/bindings.h
+  name: NekotonBindings
+  description: Nekoton core bindings
+
+analyzer:
+  enable-experiment:
+    - non-nullable

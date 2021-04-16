@@ -1,0 +1,6 @@
+language = "C"
+autogen_warning = "// AUTO GENERATED FILE, DO NOT EDIT."
+
+[defines]
+"target_os = ios" = "TARGET_OS_IOS"
+"target_os = macos" = "TARGET_OS_MACOS"
