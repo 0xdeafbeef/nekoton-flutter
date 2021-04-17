@@ -19,6 +19,34 @@ class NekotonBindings {
           lookup)
       : _lookup = lookup;
 
+  int create_runtime(
+    RuntimeParams params,
+    ffi.Pointer<ffi.Pointer<Runtime>> runtime,
+  ) {
+    return _create_runtime(
+      params,
+      runtime,
+    );
+  }
+
+  late final _create_runtime_ptr =
+      _lookup<ffi.NativeFunction<_c_create_runtime>>('create_runtime');
+  late final _dart_create_runtime _create_runtime =
+      _create_runtime_ptr.asFunction<_dart_create_runtime>();
+
+  void delete_runtime(
+    ffi.Pointer<Runtime> runtime,
+  ) {
+    return _delete_runtime(
+      runtime,
+    );
+  }
+
+  late final _delete_runtime_ptr =
+      _lookup<ffi.NativeFunction<_c_delete_runtime>>('delete_runtime');
+  late final _dart_delete_runtime _delete_runtime =
+      _delete_runtime_ptr.asFunction<_dart_delete_runtime>();
+
   ffi.Pointer<ffi.Int8> rust_greeting(
     ffi.Pointer<ffi.Int8> to,
   ) {
@@ -45,6 +73,31 @@ class NekotonBindings {
   late final _dart_rust_cstr_free _rust_cstr_free =
       _rust_cstr_free_ptr.asFunction<_dart_rust_cstr_free>();
 }
+
+class Runtime extends ffi.Opaque {}
+
+class RuntimeParams extends ffi.Struct {
+  @ffi.Uint32()
+  external int worker_threads;
+}
+
+typedef _c_create_runtime = ffi.Uint8 Function(
+  RuntimeParams params,
+  ffi.Pointer<ffi.Pointer<Runtime>> runtime,
+);
+
+typedef _dart_create_runtime = int Function(
+  RuntimeParams params,
+  ffi.Pointer<ffi.Pointer<Runtime>> runtime,
+);
+
+typedef _c_delete_runtime = ffi.Void Function(
+  ffi.Pointer<Runtime> runtime,
+);
+
+typedef _dart_delete_runtime = void Function(
+  ffi.Pointer<Runtime> runtime,
+);
 
 typedef _c_rust_greeting = ffi.Pointer<ffi.Int8> Function(
   ffi.Pointer<ffi.Int8> to,

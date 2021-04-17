@@ -1,3 +1,5 @@
+import 'dart:developer';
+
 import 'package:flutter/material.dart';
 import 'package:nekoton/core.dart';
 
@@ -29,6 +31,7 @@ class MyHomePage extends StatefulWidget {
 
 class _MyHomePageState extends State<MyHomePage> {
   String _text = '';
+  late CoreIsolate core;
 
   void _incrementCounter() {
     setState(() {
@@ -59,5 +62,21 @@ class _MyHomePageState extends State<MyHomePage> {
         child: Icon(Icons.add),
       ),
     );
+  }
+
+  @override
+  void initState() {
+    log("starting runtime...");
+    CoreIsolate.spawn().then((value) {
+      core = value;
+      log("started runtime");
+    });
+
+    super.initState();
+  }
+
+  @override
+  void dispose() {
+    super.dispose();
   }
 }
