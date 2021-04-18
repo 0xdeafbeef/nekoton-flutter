@@ -19,6 +19,17 @@ class NekotonBindings {
           lookup)
       : _lookup = lookup;
 
+  void init(
+    ffi.Pointer<ffi.NativeFunction<DartPostCObjectFnType>> post_cobject,
+  ) {
+    return _init(
+      post_cobject,
+    );
+  }
+
+  late final _init_ptr = _lookup<ffi.NativeFunction<_c_init>>('init');
+  late final _dart_init _init = _init_ptr.asFunction<_dart_init>();
+
   int create_runtime(
     RuntimeParams params,
     ffi.Pointer<ffi.Pointer<Runtime>> runtime,
@@ -34,7 +45,7 @@ class NekotonBindings {
   late final _dart_create_runtime _create_runtime =
       _create_runtime_ptr.asFunction<_dart_create_runtime>();
 
-  void delete_runtime(
+  int delete_runtime(
     ffi.Pointer<Runtime> runtime,
   ) {
     return _delete_runtime(
@@ -47,31 +58,26 @@ class NekotonBindings {
   late final _dart_delete_runtime _delete_runtime =
       _delete_runtime_ptr.asFunction<_dart_delete_runtime>();
 
-  ffi.Pointer<ffi.Int8> rust_greeting(
-    ffi.Pointer<ffi.Int8> to,
+  int wait(
+    ffi.Pointer<Runtime> runtime,
+    int seconds,
+    int send_port,
   ) {
-    return _rust_greeting(
-      to,
+    return _wait(
+      runtime,
+      seconds,
+      send_port,
     );
   }
 
-  late final _rust_greeting_ptr =
-      _lookup<ffi.NativeFunction<_c_rust_greeting>>('rust_greeting');
-  late final _dart_rust_greeting _rust_greeting =
-      _rust_greeting_ptr.asFunction<_dart_rust_greeting>();
+  late final _wait_ptr = _lookup<ffi.NativeFunction<_c_wait>>('wait');
+  late final _dart_wait _wait = _wait_ptr.asFunction<_dart_wait>();
+}
 
-  void rust_cstr_free(
-    ffi.Pointer<ffi.Int8> s,
-  ) {
-    return _rust_cstr_free(
-      s,
-    );
-  }
-
-  late final _rust_cstr_free_ptr =
-      _lookup<ffi.NativeFunction<_c_rust_cstr_free>>('rust_cstr_free');
-  late final _dart_rust_cstr_free _rust_cstr_free =
-      _rust_cstr_free_ptr.asFunction<_dart_rust_cstr_free>();
+abstract class ExitCode {
+  static const int Ok = 0;
+  static const int FailedToCreateRuntime = 1;
+  static const int RuntimeIsNotInitialized = 2;
 }
 
 class Runtime extends ffi.Opaque {}
@@ -81,7 +87,20 @@ class RuntimeParams extends ffi.Struct {
   external int worker_threads;
 }
 
-typedef _c_create_runtime = ffi.Uint8 Function(
+typedef DartPostCObjectFnType = ffi.Uint8 Function(
+  ffi.Int64,
+  ffi.Pointer<ffi.Void>,
+);
+
+typedef _c_init = ffi.Void Function(
+  ffi.Pointer<ffi.NativeFunction<DartPostCObjectFnType>> post_cobject,
+);
+
+typedef _dart_init = void Function(
+  ffi.Pointer<ffi.NativeFunction<DartPostCObjectFnType>> post_cobject,
+);
+
+typedef _c_create_runtime = ffi.Int32 Function(
   RuntimeParams params,
   ffi.Pointer<ffi.Pointer<Runtime>> runtime,
 );
@@ -91,26 +110,22 @@ typedef _dart_create_runtime = int Function(
   ffi.Pointer<ffi.Pointer<Runtime>> runtime,
 );
 
-typedef _c_delete_runtime = ffi.Void Function(
+typedef _c_delete_runtime = ffi.Int32 Function(
   ffi.Pointer<Runtime> runtime,
 );
 
-typedef _dart_delete_runtime = void Function(
+typedef _dart_delete_runtime = int Function(
   ffi.Pointer<Runtime> runtime,
 );
 
-typedef _c_rust_greeting = ffi.Pointer<ffi.Int8> Function(
-  ffi.Pointer<ffi.Int8> to,
+typedef _c_wait = ffi.Int32 Function(
+  ffi.Pointer<Runtime> runtime,
+  ffi.Uint32 seconds,
+  ffi.Int64 send_port,
 );
 
-typedef _dart_rust_greeting = ffi.Pointer<ffi.Int8> Function(
-  ffi.Pointer<ffi.Int8> to,
-);
-
-typedef _c_rust_cstr_free = ffi.Void Function(
-  ffi.Pointer<ffi.Int8> s,
-);
-
-typedef _dart_rust_cstr_free = void Function(
-  ffi.Pointer<ffi.Int8> s,
+typedef _dart_wait = int Function(
+  ffi.Pointer<Runtime> runtime,
+  int seconds,
+  int send_port,
 );

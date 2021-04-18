@@ -1,10 +1,9 @@
 import 'dart:async';
+import 'dart:developer';
 import 'dart:ffi';
 import 'dart:io';
 import 'dart:isolate';
-import 'dart:typed_data';
 
-import 'package:async/async.dart';
 import 'package:ffi/ffi.dart';
 import 'package:stream_channel/isolate_channel.dart';
 import 'package:stream_channel/stream_channel.dart';
@@ -13,78 +12,48 @@ import './bindings.dart' as nt;
 
 const DYNAMIC_LIBRARY_FILE_NAME = "libntbindings.so";
 
-class Core {
-  static final nt.NekotonBindings _bindings =
-      nt.NekotonBindings(Core._loadLibrary());
+class _Nekoton {
+  static final nt.NekotonBindings bindings = _Nekoton._loadLibrary();
 
-  static DynamicLibrary _loadLibrary() {
-    return Platform.isAndroid
+  static nt.NekotonBindings _loadLibrary() {
+    final library = Platform.isAndroid
         ? DynamicLibrary.open(DYNAMIC_LIBRARY_FILE_NAME)
         : DynamicLibrary.process();
-  }
 
-  /// Computes a greeting for the given name using the native function
-  static String greet(String name) {
-    final ptrName = name.toNativeUtf8().cast<Int8>();
-
-    // Native call
-    final ptrResult = _bindings.rust_greeting(ptrName);
-
-    // Cast the result pointer to a Dart string
-    final result = ptrResult.cast<Utf8>().toDartString();
-
-    // Clone the given result, so that the original string can be freed
-    final resultCopy = "" + result;
-
-    // Free the native value
-    Core._free(result);
-
-    return resultCopy;
-  }
-
-  /// Releases the memory allocated to handle the given (result) value
-  static void _free(String value) {
-    final ptr = value.toNativeUtf8().cast<Int8>();
-    return _bindings.rust_cstr_free(ptr);
+    final bindings = nt.NekotonBindings(library);
+    bindings.init(NativeApi.postCObject.cast());
+    return bindings;
   }
 }
 
-class CoreIsolate {
+class NekotonIsolate {
   final SendPort connectPort;
 
-  CoreIsolate.fromConnectPort(this.connectPort);
+  NekotonIsolate.fromConnectPort(this.connectPort);
 
-  StreamChannel _open() {
-    final receive = ReceivePort('nekoton client receive');
-    connectPort.send(receive.sendPort);
+  Future<void> wait(int seconds) async {
+    final ReceivePort callbackPort = ReceivePort();
+    connectPort.send(callbackPort.sendPort);
 
-    final controller =
-        StreamChannelController(allowForeignErrors: false, sync: true);
-    receive.listen((message) {
+    Completer<void> done = new Completer<void>();
+    callbackPort.listen((message) {
       if (message is SendPort) {
-        controller.local.stream
-            .map(_prepareForTransport)
-            .listen(message.send, onDone: receive.close);
+        log("Got connection message");
+        message.send(CmdWait(seconds, callbackPort.sendPort));
       } else {
-        controller.local.sink.add(_decodeAfterTransport(message));
+        log("Finished waiting");
+        done.complete();
       }
     });
 
-    return controller.foreign;
+    await done.future;
   }
 
-  static Future<CoreIsolate> spawn() async {
+  static Future<NekotonIsolate> spawn() async {
     final receiveServer = ReceivePort();
-    final keyFuture = receiveServer.first;
-
     await Isolate.spawn(_startNekotonIsolate, [receiveServer.sendPort]);
-    final key = await keyFuture as SendPort;
-    return CoreIsolate.fromConnectPort(key);
-  }
-
-  factory CoreIsolate.inCurrent() {
-    final server = _RunningNekotonServer();
-    return CoreIsolate.fromConnectPort(server.portToOpenConnection);
+    final connectPort = await receiveServer.first as SendPort;
+    return NekotonIsolate.fromConnectPort(connectPort);
   }
 }
 
@@ -95,11 +64,9 @@ void _startNekotonIsolate(List args) {
   sendPort.send(server.portToOpenConnection);
 }
 
-class NekotonConnection {}
-
 class _RunningNekotonServer {
   final NekotonServer server;
-  final ReceivePort connectPort = ReceivePort('nekoton connect');
+  final ReceivePort connectPort = ReceivePort();
   int _counter = 0;
 
   SendPort get portToOpenConnection => connectPort.sendPort;
@@ -111,14 +78,9 @@ class _RunningNekotonServer {
             ReceivePort('nekoton channel #${_counter++}');
 
         message.send(receiveForConnection.sendPort);
-        final channel = IsolateChannel(receiveForConnection, message)
-            .changeStream((source) => source.map(_decodeAfterTransport))
-            .transformSink(
-              StreamSinkTransformer.fromHandlers(
-                  handleData: (data, sink) =>
-                      sink.add(_prepareForTransport(data))),
-            );
+        final channel = IsolateChannel(receiveForConnection, message);
 
+        log("Starting serve");
         server.serve(channel);
       }
     });
@@ -127,26 +89,6 @@ class _RunningNekotonServer {
       subscription.cancel();
       connectPort.close();
     });
-  }
-}
-
-Object? _prepareForTransport(Object? source) {
-  if (source is! List) return source;
-
-  if (source is Uint8List) {
-    return TransferableTypedData.fromList([source]);
-  }
-
-  return source.map(_prepareForTransport).toList();
-}
-
-Object? _decodeAfterTransport(Object? source) {
-  if (source is TransferableTypedData) {
-    return source.materialize().asUint8List();
-  } else if (source is List) {
-    return source.map(_decodeAfterTransport).toList();
-  } else {
-    return source;
   }
 }
 
@@ -179,6 +121,19 @@ class _NekotonServerImplementation implements NekotonServer {
       throw StateError('Cannot add new channels after shutdown() was called');
     }
 
+    log("Connected to channel");
+
+    final subscription = channel.stream.listen((event) async {
+      log("Got event");
+      if (event is CmdWait) {
+        log("Got cmd wait: ${event.seconds}");
+        await runtime.wait(event.seconds);
+        channel.sink.add(true);
+      }
+    });
+
+    done.then((value) => subscription.cancel());
+
     // TODO: add connection
   }
 
@@ -187,6 +142,13 @@ class _NekotonServerImplementation implements NekotonServer {
     _isShuttingDown = true;
     return done;
   }
+}
+
+class CmdWait {
+  final int seconds;
+  final SendPort sendPort;
+
+  CmdWait(this.seconds, this.sendPort);
 }
 
 class Runtime {
@@ -199,9 +161,10 @@ class Runtime {
     params.ref.worker_threads = workerThreads;
 
     final int resultCode =
-        Core._bindings.create_runtime(params.ref, runtimeOut);
-    if (resultCode != 0) {
+        _Nekoton.bindings.create_runtime(params.ref, runtimeOut);
+    if (resultCode != nt.ExitCode.Ok) {
       calloc.free(params);
+      calloc.free(runtimeOut);
       throw Exception("Failed to create runtime");
     }
 
@@ -211,10 +174,24 @@ class Runtime {
     calloc.free(runtimeOut);
   }
 
-  void stop() {
-    if (_runtime.address == nullptr.address) {
-      return;
+  Future<void> wait(int seconds) {
+    final receivePort = ReceivePort();
+
+    final resultCode = _Nekoton.bindings
+        .wait(_runtime, seconds, receivePort.sendPort.nativePort);
+    if (resultCode != nt.ExitCode.Ok) {
+      log("Not ok");
+      throw Exception("Failed to wait");
     }
-    Core._bindings.delete_runtime(_runtime);
+
+    log("Waiting...");
+    return receivePort.first;
+  }
+
+  void stop() {
+    final int resultCode = _Nekoton.bindings.delete_runtime(_runtime);
+    if (resultCode != nt.ExitCode.Ok) {
+      throw Exception("Failed to delete runtime");
+    }
   }
 }

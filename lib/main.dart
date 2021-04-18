@@ -31,11 +31,12 @@ class MyHomePage extends StatefulWidget {
 
 class _MyHomePageState extends State<MyHomePage> {
   String _text = '';
-  late CoreIsolate core;
+  late NekotonIsolate core;
 
   void _incrementCounter() {
     setState(() {
-      _text = Core.greet("world");
+      _text = "123";
+      core.wait(1).then((value) => log("wait resolved"));
     });
   }
 
@@ -67,7 +68,7 @@ class _MyHomePageState extends State<MyHomePage> {
   @override
   void initState() {
     log("starting runtime...");
-    CoreIsolate.spawn().then((value) {
+    NekotonIsolate.spawn().then((value) {
       core = value;
       log("started runtime");
     });
