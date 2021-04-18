@@ -31,12 +31,19 @@ class MyHomePage extends StatefulWidget {
 
 class _MyHomePageState extends State<MyHomePage> {
   String _text = '';
+  TonWalletSubscription? _subscription;
   late NekotonIsolate core;
 
-  void _incrementCounter() {
-    setState(() {
-      _text = "123";
-      core.wait(1).then((value) => log("wait resolved"));
+  void _subscribe() async {
+    final subscription = await core.subscribe(
+        "1161f67ca580dd2b9935967b04109e0e988601fc0894e145f7cd56534e817257",
+        ContractType.WalletV3);
+    setState(() => {_subscription = subscription});
+
+    subscription.balance.listen((balance) {
+      setState(() {
+        _text = balance.toString();
+      });
     });
   }
 
@@ -48,7 +55,7 @@ class _MyHomePageState extends State<MyHomePage> {
           mainAxisAlignment: MainAxisAlignment.center,
           children: <Widget>[
             Text(
-              'You have pushed the button this many times:',
+              'Your balance',
             ),
             Text(
               '$_text',
@@ -57,11 +64,13 @@ class _MyHomePageState extends State<MyHomePage> {
           ],
         ),
       ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: _incrementCounter,
-        tooltip: 'Increment',
-        child: Icon(Icons.add),
-      ),
+      floatingActionButton: (_subscription == null
+          ? FloatingActionButton(
+              onPressed: _subscribe,
+              tooltip: 'Subscribe',
+              child: Icon(Icons.add),
+            )
+          : null),
     );
   }
 

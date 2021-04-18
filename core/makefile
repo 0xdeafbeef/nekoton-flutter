@@ -77,7 +77,7 @@ ndk-home:
 bindings: target/bindings.h
 
 target/bindings.h: $(SOURCES)
-	cbindgen ./ -c cbindgen.toml | uniq > $@
+	cbindgen ./ -c cbindgen.toml| uniq > $@
 	@echo "[DONE] $@"
 
 ## :

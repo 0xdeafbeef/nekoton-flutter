@@ -1,13 +1,13 @@
 use anyhow::Result;
 
-use nekoton::external::*;
+use nekoton::external;
 
-pub struct GqlTransportImpl {
+pub struct GqlConnection {
     url: reqwest::Url,
     client: reqwest::Client,
 }
 
-impl GqlTransportImpl {
+impl GqlConnection {
     pub fn new(url: &str) -> Result<Self> {
         Ok(Self {
             url: url.parse::<reqwest::Url>()?,
@@ -17,7 +17,7 @@ impl GqlTransportImpl {
 }
 
 #[async_trait::async_trait]
-impl GqlConnection for GqlTransportImpl {
+impl external::GqlConnection for GqlConnection {
     async fn post(&self, data: &str) -> Result<String> {
         let data = data.to_string();
         let req = self

@@ -10,6 +10,8 @@ import 'package:stream_channel/stream_channel.dart';
 
 import './bindings.dart' as nt;
 
+export './bindings.dart' show ContractType;
+
 const DYNAMIC_LIBRARY_FILE_NAME = "libntbindings.so";
 
 class _Nekoton {
@@ -46,7 +48,30 @@ class NekotonIsolate {
       }
     });
 
-    await done.future;
+    return done.future;
+  }
+
+  Future<TonWalletSubscription> subscribe(
+      String publicKey, int contractType) async {
+    final ReceivePort callbackPort = ReceivePort();
+    connectPort.send(callbackPort.sendPort);
+
+    final ReceivePort notificationPort = ReceivePort();
+
+    Completer<TonWalletSubscription> done =
+        new Completer<TonWalletSubscription>();
+    callbackPort.listen((message) {
+      if (message is SendPort) {
+        log("Got connection message");
+        message.send(
+            CmdSubscribe(publicKey, contractType, notificationPort.sendPort));
+      } else if (message is int) {
+        log("Finished subscription");
+        done.complete(TonWalletSubscription(notificationPort, message));
+      }
+    });
+
+    return done.future;
   }
 
   static Future<NekotonIsolate> spawn() async {
@@ -106,11 +131,14 @@ abstract class NekotonServer {
 
 class _NekotonServerImplementation implements NekotonServer {
   final Runtime runtime;
+  final Transport transport;
 
   bool _isShuttingDown = false;
   final Completer<void> _done = Completer();
 
-  _NekotonServerImplementation() : runtime = Runtime(1);
+  _NekotonServerImplementation()
+      : runtime = Runtime(1),
+        transport = Transport("https://main.ton.dev/graphql");
 
   @override
   Future<void> get done => _done.future;
@@ -121,20 +149,40 @@ class _NekotonServerImplementation implements NekotonServer {
       throw StateError('Cannot add new channels after shutdown() was called');
     }
 
-    log("Connected to channel");
-
-    final subscription = channel.stream.listen((event) async {
-      log("Got event");
-      if (event is CmdWait) {
-        log("Got cmd wait: ${event.seconds}");
-        await runtime.wait(event.seconds);
+    final subscription = channel.stream.listen((cmd) async {
+      if (cmd is CmdWait) {
+        await runtime.wait(cmd.seconds);
         channel.sink.add(true);
+      } else if (cmd is CmdSubscribe) {
+        channel.sink.add(await subscribe(cmd));
       }
     });
 
     done.then((value) => subscription.cancel());
 
     // TODO: add connection
+  }
+
+  Future<int> subscribe(CmdSubscribe cmd) async {
+    final resultPort = ReceivePort();
+
+    final resultCode = _Nekoton.bindings.subscribe_to_ton_wallet(
+        runtime._handle,
+        transport._handle,
+        cmd.publicKey.toNativeUtf8().cast(),
+        cmd.contractType,
+        cmd.notificationPort.nativePort,
+        resultPort.sendPort.nativePort);
+    if (resultCode != nt.ExitCode.Ok) {
+      throw Exception("Failed to initiate subscription to ton wallet");
+    }
+
+    final subscriptionResult = await resultPort.first as List;
+    if (subscriptionResult[0] as int != nt.ExitCode.Ok) {
+      throw Exception("Failed to subscribe to ton wallet");
+    }
+
+    return subscriptionResult[1];
   }
 
   @override
@@ -151,8 +199,16 @@ class CmdWait {
   CmdWait(this.seconds, this.sendPort);
 }
 
+class CmdSubscribe {
+  final String publicKey;
+  final int contractType;
+  final SendPort notificationPort;
+
+  CmdSubscribe(this.publicKey, this.contractType, this.notificationPort);
+}
+
 class Runtime {
-  late Pointer<nt.Runtime> _runtime;
+  late Pointer<nt.Runtime> _handle;
 
   Runtime(int workerThreads) {
     Pointer<nt.RuntimeParams> params = calloc();
@@ -160,25 +216,25 @@ class Runtime {
 
     params.ref.worker_threads = workerThreads;
 
-    final int resultCode =
-        _Nekoton.bindings.create_runtime(params.ref, runtimeOut);
-    if (resultCode != nt.ExitCode.Ok) {
-      calloc.free(params);
-      calloc.free(runtimeOut);
-      throw Exception("Failed to create runtime");
+    final success = _Nekoton.bindings.create_runtime(params.ref, runtimeOut) ==
+        nt.ExitCode.Ok;
+    if (success) {
+      _handle = runtimeOut.value;
     }
-
-    _runtime = runtimeOut.value;
 
     calloc.free(params);
     calloc.free(runtimeOut);
+
+    if (!success) {
+      throw Exception("Failed to create runtime");
+    }
   }
 
   Future<void> wait(int seconds) {
     final receivePort = ReceivePort();
 
     final resultCode = _Nekoton.bindings
-        .wait(_runtime, seconds, receivePort.sendPort.nativePort);
+        .wait(_handle, seconds, receivePort.sendPort.nativePort);
     if (resultCode != nt.ExitCode.Ok) {
       log("Not ok");
       throw Exception("Failed to wait");
@@ -189,9 +245,59 @@ class Runtime {
   }
 
   void stop() {
-    final int resultCode = _Nekoton.bindings.delete_runtime(_runtime);
-    if (resultCode != nt.ExitCode.Ok) {
+    if (_Nekoton.bindings.delete_runtime(_handle) != nt.ExitCode.Ok) {
       throw Exception("Failed to delete runtime");
+    }
+  }
+}
+
+class Transport {
+  late Pointer<nt.GqlTransport> _handle;
+
+  Transport(String url) {
+    Pointer<nt.TransportParams> params = calloc();
+    Pointer<Pointer<nt.GqlTransport>> transportOut = calloc();
+
+    params.ref.url = url.toNativeUtf8().cast();
+
+    final success =
+        _Nekoton.bindings.create_gql_transport(params.ref, transportOut) ==
+            nt.ExitCode.Ok;
+    if (success) {
+      _handle = transportOut.value;
+    }
+
+    calloc.free(params.ref.url);
+    calloc.free(params);
+    calloc.free(transportOut);
+
+    if (!success) {
+      throw Exception("Failed to create transport");
+    }
+  }
+
+  void delete() {
+    if (_Nekoton.bindings.delete_gql_transport(_handle) != nt.ExitCode.Ok) {
+      throw Exception("Failed to delete transport");
+    }
+  }
+}
+
+class TonWalletSubscription {
+  late int _handle;
+  late ReceivePort _notificationPort;
+
+  TonWalletSubscription(this._notificationPort, this._handle);
+
+  Stream<int> get balance {
+    return _notificationPort.cast();
+  }
+
+  void delete() {
+    final handle = Pointer<nt.TonWalletSubscription>.fromAddress(_handle);
+    final resultCode = _Nekoton.bindings.delete_subscription(handle);
+    if (resultCode != nt.ExitCode.Ok) {
+      throw Exception("Failed to delete ton wallet subscription");
     }
   }
 }
