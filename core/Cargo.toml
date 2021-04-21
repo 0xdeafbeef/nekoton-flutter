@@ -27,6 +27,8 @@ syn = "=1.0.64"
 thiserror = "1.0"
 tokio = { version = "1.5", features = [ "rt-multi-thread", "net", "fs", "sync" ] }
 
+android_logger = "0.10.1"
+log ="0.4.14"
 # labs
 ton_api = { git = "https://github.com/broxus/ton-labs-tl.git", branch = "original", package = "ton_api" }
 ton_block = { git = "https://github.com/tonlabs/ton-labs-block.git" }

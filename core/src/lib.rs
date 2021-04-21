@@ -17,6 +17,9 @@ use nekoton::transport::Transport;
 
 use crate::external::GqlConnection;
 use crate::ffi::IntoDart;
+use nekoton::core::ton_wallet::compute_address;
+use android_logger::Config;
+use log::Level;
 
 pub struct CoreState {}
 
@@ -26,6 +29,9 @@ pub struct Runtime {
 
 impl Runtime {
     pub fn new(worker_threads: usize) -> Result<Self> {
+        android_logger::init_once(
+            Config::default().with_min_level(Level::Trace),
+        );
         let runtime = Arc::new(
             tokio::runtime::Builder::new_multi_thread()
                 .worker_threads(worker_threads)
@@ -180,6 +186,7 @@ pub unsafe extern "C" fn subscribe_to_ton_wallet(
     let transport = (*gql_transport).inner.clone();
 
     (*runtime).inner.spawn(async move {
+        log::info!("{}", compute_address(&public_key, contract_type, 0).to_string());
         match ton_wallet::TonWallet::subscribe(transport, public_key, contract_type, handler).await
         {
             Ok(new_subscription) => {
