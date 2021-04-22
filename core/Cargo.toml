@@ -36,3 +36,4 @@ ton_types = { git = "https://github.com/tonlabs/ton-labs-types.git" }
 
 # broxus
 nekoton = { git = "https://github.com/broxus/nekoton.git" }
+once_cell = "1.7.2"

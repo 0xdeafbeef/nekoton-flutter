@@ -30,41 +30,11 @@ class NekotonBindings {
   late final _init_ptr = _lookup<ffi.NativeFunction<_c_init>>('init');
   late final _dart_init _init = _init_ptr.asFunction<_dart_init>();
 
-  int create_runtime(
-    RuntimeParams params,
-    ffi.Pointer<ffi.Pointer<Runtime>> runtime,
-  ) {
-    return _create_runtime(
-      params,
-      runtime,
-    );
-  }
-
-  late final _create_runtime_ptr =
-      _lookup<ffi.NativeFunction<_c_create_runtime>>('create_runtime');
-  late final _dart_create_runtime _create_runtime =
-      _create_runtime_ptr.asFunction<_dart_create_runtime>();
-
-  int delete_runtime(
-    ffi.Pointer<Runtime> runtime,
-  ) {
-    return _delete_runtime(
-      runtime,
-    );
-  }
-
-  late final _delete_runtime_ptr =
-      _lookup<ffi.NativeFunction<_c_delete_runtime>>('delete_runtime');
-  late final _dart_delete_runtime _delete_runtime =
-      _delete_runtime_ptr.asFunction<_dart_delete_runtime>();
-
   int wait(
-    ffi.Pointer<Runtime> runtime,
     int seconds,
     int send_port,
   ) {
     return _wait(
-      runtime,
       seconds,
       send_port,
     );
@@ -104,7 +74,6 @@ class NekotonBindings {
       _delete_gql_transport_ptr.asFunction<_dart_delete_gql_transport>();
 
   int subscribe_to_ton_wallet(
-    ffi.Pointer<Runtime> runtime,
     ffi.Pointer<GqlTransport> gql_transport,
     ffi.Pointer<ffi.Int8> public_key,
     int contract_type,
@@ -112,7 +81,6 @@ class NekotonBindings {
     int result_port,
   ) {
     return _subscribe_to_ton_wallet(
-      runtime,
       gql_transport,
       public_key,
       contract_type,
@@ -163,14 +131,7 @@ abstract class ExitCode {
 
 class GqlTransport extends ffi.Opaque {}
 
-class Runtime extends ffi.Opaque {}
-
 class TonWalletSubscription extends ffi.Opaque {}
-
-class RuntimeParams extends ffi.Struct {
-  @ffi.Uint32()
-  external int worker_threads;
-}
 
 class TransportParams extends ffi.Struct {
   external ffi.Pointer<ffi.Int8> url;
@@ -189,32 +150,12 @@ typedef _dart_init = void Function(
   ffi.Pointer<ffi.NativeFunction<DartPostCObjectFnType>> post_cobject,
 );
 
-typedef _c_create_runtime = ffi.Int32 Function(
-  RuntimeParams params,
-  ffi.Pointer<ffi.Pointer<Runtime>> runtime,
-);
-
-typedef _dart_create_runtime = int Function(
-  RuntimeParams params,
-  ffi.Pointer<ffi.Pointer<Runtime>> runtime,
-);
-
-typedef _c_delete_runtime = ffi.Int32 Function(
-  ffi.Pointer<Runtime> runtime,
-);
-
-typedef _dart_delete_runtime = int Function(
-  ffi.Pointer<Runtime> runtime,
-);
-
 typedef _c_wait = ffi.Int32 Function(
-  ffi.Pointer<Runtime> runtime,
   ffi.Uint32 seconds,
   ffi.Int64 send_port,
 );
 
 typedef _dart_wait = int Function(
-  ffi.Pointer<Runtime> runtime,
   int seconds,
   int send_port,
 );
@@ -238,7 +179,6 @@ typedef _dart_delete_gql_transport = int Function(
 );
 
 typedef _c_subscribe_to_ton_wallet = ffi.Int32 Function(
-  ffi.Pointer<Runtime> runtime,
   ffi.Pointer<GqlTransport> gql_transport,
   ffi.Pointer<ffi.Int8> public_key,
   ffi.Int32 contract_type,
@@ -247,7 +187,6 @@ typedef _c_subscribe_to_ton_wallet = ffi.Int32 Function(
 );
 
 typedef _dart_subscribe_to_ton_wallet = int Function(
-  ffi.Pointer<Runtime> runtime,
   ffi.Pointer<GqlTransport> gql_transport,
   ffi.Pointer<ffi.Int8> public_key,
   int contract_type,

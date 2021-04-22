@@ -137,7 +137,7 @@ class _NekotonServerImplementation implements NekotonServer {
   final Completer<void> _done = Completer();
 
   _NekotonServerImplementation()
-      : runtime = Runtime(1),
+      : runtime = Runtime(),
         transport = Transport("https://main.ton.dev/graphql");
 
   @override
@@ -167,7 +167,6 @@ class _NekotonServerImplementation implements NekotonServer {
     final resultPort = ReceivePort();
 
     final resultCode = _Nekoton.bindings.subscribe_to_ton_wallet(
-        runtime._handle,
         transport._handle,
         cmd.publicKey.toNativeUtf8().cast(),
         cmd.contractType,
@@ -208,33 +207,14 @@ class CmdSubscribe {
 }
 
 class Runtime {
-  late Pointer<nt.Runtime> _handle;
 
-  Runtime(int workerThreads) {
-    Pointer<nt.RuntimeParams> params = calloc();
-    Pointer<Pointer<nt.Runtime>> runtimeOut = calloc();
-
-    params.ref.worker_threads = workerThreads;
-
-    final success = _Nekoton.bindings.create_runtime(params.ref, runtimeOut) ==
-        nt.ExitCode.Ok;
-    if (success) {
-      _handle = runtimeOut.value;
-    }
-
-    calloc.free(params);
-    calloc.free(runtimeOut);
-
-    if (!success) {
-      throw Exception("Failed to create runtime");
-    }
-  }
+  Runtime();
 
   Future<void> wait(int seconds) {
     final receivePort = ReceivePort();
 
     final resultCode = _Nekoton.bindings
-        .wait(_handle, seconds, receivePort.sendPort.nativePort);
+        .wait(seconds, receivePort.sendPort.nativePort);
     if (resultCode != nt.ExitCode.Ok) {
       log("Not ok");
       throw Exception("Failed to wait");
@@ -244,11 +224,6 @@ class Runtime {
     return receivePort.first;
   }
 
-  void stop() {
-    if (_Nekoton.bindings.delete_runtime(_handle) != nt.ExitCode.Ok) {
-      throw Exception("Failed to delete runtime");
-    }
-  }
 }
 
 class Transport {
