@@ -19,6 +19,21 @@ class NekotonBindings {
           lookup)
       : _lookup = lookup;
 
+  int create_storage(
+    ffi.Pointer<ffi.Int8> data,
+    ffi.Pointer<ffi.Pointer<NativeStorage>> storage_ptr,
+  ) {
+    return _create_storage(
+      data,
+      storage_ptr,
+    );
+  }
+
+  late final _create_storage_ptr =
+      _lookup<ffi.NativeFunction<_c_create_storage>>('create_storage');
+  late final _dart_create_storage _create_storage =
+      _create_storage_ptr.asFunction<_dart_create_storage>();
+
   void init(
     ffi.Pointer<ffi.NativeFunction<DartPostCObjectFnType>> post_cobject,
   ) {
@@ -131,11 +146,23 @@ abstract class ExitCode {
 
 class GqlTransport extends ffi.Opaque {}
 
+class NativeStorage extends ffi.Opaque {}
+
 class TonWalletSubscription extends ffi.Opaque {}
 
 class TransportParams extends ffi.Struct {
   external ffi.Pointer<ffi.Int8> url;
 }
+
+typedef _c_create_storage = ffi.Int32 Function(
+  ffi.Pointer<ffi.Int8> data,
+  ffi.Pointer<ffi.Pointer<NativeStorage>> storage_ptr,
+);
+
+typedef _dart_create_storage = int Function(
+  ffi.Pointer<ffi.Int8> data,
+  ffi.Pointer<ffi.Pointer<NativeStorage>> storage_ptr,
+);
 
 typedef DartPostCObjectFnType = ffi.Uint8 Function(
   ffi.Int64,

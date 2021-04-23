@@ -149,12 +149,16 @@ class _NekotonServerImplementation implements NekotonServer {
       throw StateError('Cannot add new channels after shutdown() was called');
     }
 
-    final subscription = channel.stream.listen((cmd) async {
-      if (cmd is CmdWait) {
-        await runtime.wait(cmd.seconds);
+    final subscription = channel.stream.listen((data) async {
+      if (data is CmdWait) {
+        await runtime.wait(data.seconds);
         channel.sink.add(true);
-      } else if (cmd is CmdSubscribe) {
-        channel.sink.add(await subscribe(cmd));
+      }
+      if (data is CmdSubscribe) {
+        channel.sink.add(await subscribe(data));
+      }
+      if (data is String) {
+        log("lolkek");
       }
     });
 
@@ -207,14 +211,13 @@ class CmdSubscribe {
 }
 
 class Runtime {
-
   Runtime();
 
   Future<void> wait(int seconds) {
     final receivePort = ReceivePort();
 
-    final resultCode = _Nekoton.bindings
-        .wait(seconds, receivePort.sendPort.nativePort);
+    final resultCode =
+        _Nekoton.bindings.wait(seconds, receivePort.sendPort.nativePort);
     if (resultCode != nt.ExitCode.Ok) {
       log("Not ok");
       throw Exception("Failed to wait");
@@ -223,7 +226,6 @@ class Runtime {
     log("Waiting...");
     return receivePort.first;
   }
-
 }
 
 class Transport {
@@ -265,6 +267,10 @@ class TonWalletSubscription {
   TonWalletSubscription(this._notificationPort, this._handle);
 
   Stream<int> get balance {
+    return _notificationPort.cast();
+  }
+
+  Stream<String> get transactions {
     return _notificationPort.cast();
   }
 

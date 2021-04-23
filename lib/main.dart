@@ -42,9 +42,13 @@ class _MyHomePageState extends State<MyHomePage> {
 
     subscription.balance.listen((balance) {
       setState(() {
-        _text = balance.toString();
+        _text = (balance / 1000000000).toString();
       });
     });
+  }
+
+  void _send() async {
+
   }
 
   @override
