@@ -13,6 +13,7 @@ use nekoton::external::Storage;
 use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::RwLock;
+use crate::TonWallet;
 
 #[derive(Clone)]
 pub struct NativeStorage {
@@ -84,7 +85,7 @@ pub async fn open_storage(data: &str) -> Result<KeyStore, Error> {
     Ok(keystore)
 }
 
-pub async fn sign_legacy_inner(
+async fn sign_legacy_inner(
     keystore: &KeyStore,
     password: String,
     key: &PublicKey,
@@ -110,3 +111,5 @@ pub async fn sign_labs(
 ) -> Result<Signature, Error> {
     todo!()
 }
+
+

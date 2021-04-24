@@ -1,7 +1,9 @@
 mod external;
 mod ffi;
-mod native_signer;
+mod wrappers;
 
+#[macro_use]
+mod macros;
 use serde::{Deserialize, Serialize};
 use std::ffi::{CStr, CString};
 use std::os::raw::{c_char, c_int, c_longlong, c_uchar, c_uint};
@@ -43,13 +45,6 @@ macro_rules! tokio {
     };
 }
 
-macro_rules! loge {
-    ($expr:expr) => {
-        if let Err(e) = $expr {
-            log::error!("Error occured in {}:{}: {}", file!(), line!(), e);
-        }
-    };
-}
 
 pub struct CoreState {}
 
