@@ -1,5 +1,4 @@
 use super::KeyStore;
-use crate::native_signer::sign_legacy_inner;
 use crate::{ExitCode, TonWallet};
 use ed25519_dalek::PublicKey;
 use std::ffi::CString;
@@ -25,7 +24,7 @@ pub unsafe extern "C" fn sign_legacy_and_send(
         return ExitCode::BadSignData;
     }
 
-    let sign_data: Vec<u8> = std::slice::from_raw_parts(data, data_len).iter().map(|x| x as u8).collect();
+    let sign_data: Vec<u8> = std::slice::from_raw_parts(data, data_len).iter().map(|x| *x as u8).collect();
     let password = cstr_to_string!(password, ExitCode::BadPassword);
     let key = cstr_to_string!(key, ExitCode::InvalidPublicKey);
     let key = ok_or_ret!(

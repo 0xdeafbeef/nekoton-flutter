@@ -17,10 +17,10 @@ use nekoton::core::models::{AccountState, PendingTransaction, Transaction, Trans
 use nekoton::core::ton_wallet;
 use nekoton::transport::gql;
 use nekoton::transport::Transport;
+use crate::wrappers::native_signer::NativeStorage;
 
 use crate::external::GqlConnection;
 use crate::ffi::IntoDart;
-use crate::native_signer::NativeStorage;
 use android_logger::{Config, FilterBuilder};
 use log::Level;
 use nekoton::core::ton_wallet::compute_address;

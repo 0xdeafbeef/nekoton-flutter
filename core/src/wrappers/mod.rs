@@ -1,2 +1,2 @@
-mod native_signer;
+pub(crate) mod native_signer;
 mod ton_wallet;

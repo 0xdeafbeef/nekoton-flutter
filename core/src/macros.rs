@@ -28,7 +28,7 @@ macro_rules! ok_or_ret {
 macro_rules! loge {
     ($expr:expr) => {
         if let Err(e) = $expr {
-            log::error!("Error occured in {}:{}: {}", file!(), line!(), e);
+            ::log::error!("Error occured in {}:{}: {}", file!(), line!(), e);
         }
     };
 }
