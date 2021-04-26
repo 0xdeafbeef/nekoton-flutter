@@ -4,6 +4,7 @@ use nekoton::crypto::{
     DerivedKeySigner, EncryptedKey, EncryptedKeySigner, Signature, Signer, SignerStorage,
 };
 
+use crate::TonWallet;
 use anyhow;
 use anyhow::Error;
 use async_trait::async_trait;
@@ -13,7 +14,6 @@ use nekoton::external::Storage;
 use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::RwLock;
-use crate::TonWallet;
 
 #[derive(Clone)]
 pub struct NativeStorage {
@@ -111,5 +111,3 @@ pub async fn sign_labs(
 ) -> Result<Signature, Error> {
     todo!()
 }
-
-

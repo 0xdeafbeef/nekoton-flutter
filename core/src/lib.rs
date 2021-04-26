@@ -13,20 +13,20 @@ use anyhow::{Error, Result};
 use ed25519_dalek::PublicKey;
 use tokio::sync::RwLock;
 
+use crate::wrappers::native_signer::NativeStorage;
 use nekoton::core::models::{AccountState, PendingTransaction, Transaction, TransactionsBatchInfo};
 use nekoton::core::ton_wallet;
 use nekoton::transport::gql;
 use nekoton::transport::Transport;
-use crate::wrappers::native_signer::NativeStorage;
 
 use crate::external::GqlConnection;
 use crate::ffi::IntoDart;
+use crate::wrappers::native_signer;
 use android_logger::{Config, FilterBuilder};
 use log::Level;
 use nekoton::core::ton_wallet::compute_address;
 use once_cell::sync::Lazy;
 use tokio::task::JoinHandle;
-use crate::wrappers::native_signer;
 
 static RUNTIME_: Lazy<std::io::Result<tokio::runtime::Runtime>> =
     Lazy::new(|| tokio::runtime::Runtime::new());
@@ -46,7 +46,6 @@ macro_rules! get_runtime {
         }
     };
 }
-
 
 pub struct CoreState {}
 
@@ -378,7 +377,7 @@ pub enum ExitCode {
     BadPassword,
     BadKeystore,
     BadSignData,
-    BadWallet
+    BadWallet,
 }
 
 impl IntoDart for ExitCode {

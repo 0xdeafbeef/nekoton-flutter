@@ -40,12 +40,12 @@ macro_rules! loge {
 #[macro_export]
 macro_rules! match_option {
     ($matched:expr) => {
-       match $matched {
-        Ok(a) => Some(a),
-        Err(e) => {
-            ::log::error!("Failed with: {}: {}", stringify!($matched), e);
-            None
+        match $matched {
+            Ok(a) => Some(a),
+            Err(e) => {
+                ::log::error!("Failed with: {}: {}", stringify!($matched), e);
+                None
+            }
         }
-    }
     };
 }

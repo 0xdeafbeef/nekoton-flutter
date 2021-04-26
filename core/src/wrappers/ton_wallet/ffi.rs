@@ -30,19 +30,20 @@ pub unsafe extern "C" fn send(
         return ExitCode::BadSignData;
     }
 
-    let sign_data = cstr_to_string!(sign_data,ExitCode::BadSignData);
-    let sign_data: SignData = ok_or_ret!(serde_json::from_str(&sign_data),ExitCode::BadSignData);
+    let sign_data = cstr_to_string!(sign_data, ExitCode::BadSignData);
+    let sign_data: SignData = ok_or_ret!(serde_json::from_str(&sign_data), ExitCode::BadSignData);
     get_runtime!().spawn();
     ExitCode::Ok
 }
 
-async fn send_ffi(port: crate::ffi::SendPort, keystore: &KeyStore,
-                  keystore_type: SignData,
-                  to: MsgAddressInt,
-                  ammount: u64,
-                  wallet: &TonWallet,
-                  comment: Option<String>,
+async fn send_ffi(
+    port: crate::ffi::SendPort,
+    keystore: &KeyStore,
+    keystore_type: SignData,
+    to: MsgAddressInt,
+    ammount: u64,
+    wallet: &TonWallet,
+    comment: Option<String>,
 ) {
     todo!()
 }
-
