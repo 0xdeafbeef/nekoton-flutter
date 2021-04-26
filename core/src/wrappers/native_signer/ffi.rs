@@ -8,7 +8,7 @@ use std::str::Utf8Error;
 use crate::{cstr_to_string,ok_or_ret};
 use crate::wrappers::native_signer::sign_legacy_inner;
 
-pub unsafe extern "C" fn sign_legacy_and_send(
+pub unsafe extern "C" fn send(
     keystore: *const KeyStore,
     wallet: *const TonWallet,
     password: *mut c_char,
@@ -31,6 +31,6 @@ pub unsafe extern "C" fn sign_legacy_and_send(
         PublicKey::from_bytes(&ok_or_ret!(hex::decode(key), ExitCode::InvalidPublicKey)),
         ExitCode::InvalidPublicKey
     );
-    let sign =sign_legacy_inner(&keystore, password, &key, &sign_data);
+    let sign =sign_legacy_inner(&*keystore, password, &key, &sign_data);
 }
 

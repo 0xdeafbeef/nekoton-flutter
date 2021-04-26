@@ -1,3 +1,4 @@
+/// Converts c string to String
 #[macro_export]
 macro_rules! cstr_to_string {
     ($stri:expr, $ret_val:expr) => {
@@ -11,6 +12,7 @@ macro_rules! cstr_to_string {
     };
 }
 
+///Matches expression, returning provided expression in case of error;
 #[macro_export]
 macro_rules! ok_or_ret {
     ($x:expr, $ret_val:expr) => {
@@ -24,6 +26,7 @@ macro_rules! ok_or_ret {
     };
 }
 
+///Logs error
 #[macro_export]
 macro_rules! loge {
     ($expr:expr) => {
@@ -33,6 +36,7 @@ macro_rules! loge {
     };
 }
 
+///Converts `Result` to `Option` logging error
 #[macro_export]
 macro_rules! match_option {
     ($matched:expr) => {

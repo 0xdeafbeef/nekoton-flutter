@@ -2,8 +2,8 @@ mod external;
 mod ffi;
 mod wrappers;
 
-#[macro_use]
-mod macros;
+pub(crate) mod macros;
+
 use serde::{Deserialize, Serialize};
 use std::ffi::{CStr, CString};
 use std::os::raw::{c_char, c_int, c_longlong, c_uchar, c_uint};
@@ -26,15 +26,17 @@ use log::Level;
 use nekoton::core::ton_wallet::compute_address;
 use once_cell::sync::Lazy;
 use tokio::task::JoinHandle;
+use crate::wrappers::native_signer;
 
 static RUNTIME_: Lazy<std::io::Result<tokio::runtime::Runtime>> =
     Lazy::new(|| tokio::runtime::Runtime::new());
 
-macro_rules! tokio {
+#[macro_export]
+macro_rules! get_runtime {
     () => {
-        match RUNTIME_.as_ref() {
+        match crate::RUNTIME_.as_ref() {
             Ok(a) => {
-                android_logger::init_once(Config::default().with_min_level(Level::Trace));
+                // android_logger::init_once(Config::default().with_min_level(Level::Trace));
                 a
             }
             Err(e) => {
@@ -117,7 +119,7 @@ pub unsafe extern "C" fn init(post_cobject: ffi::DartPostCObjectFnType) {
 
 #[no_mangle]
 pub unsafe extern "C" fn wait(seconds: c_uint, send_port: c_longlong) -> ExitCode {
-    tokio!().spawn(async move {
+    get_runtime!().spawn(async move {
         tokio::time::sleep(std::time::Duration::from_secs(seconds as u64)).await;
 
         ffi::SendPort::new(send_port).post(());
@@ -194,7 +196,7 @@ pub unsafe extern "C" fn subscribe_to_ton_wallet(
 
     let transport = (*gql_transport).inner.clone();
 
-    tokio!().spawn(async move {
+    get_runtime!().spawn(async move {
         log::info!(
             "address: {}",
             compute_address(&public_key, contract_type, 0).to_string()
@@ -376,6 +378,7 @@ pub enum ExitCode {
     BadPassword,
     BadKeystore,
     BadSignData,
+    BadWallet
 }
 
 impl IntoDart for ExitCode {

@@ -36,5 +36,5 @@ ton_block = { git = "https://github.com/tonlabs/ton-labs-block.git" }
 ton_types = { git = "https://github.com/tonlabs/ton-labs-types.git" }
 
 # broxus
-nekoton = { git = "https://github.com/broxus/nekoton.git" }
+nekoton = { git = "ssh://git@gitlab.dexpa.io/crystal-wallet/nekoton.git", branch="dev" }
 libc = "0.2.93"
