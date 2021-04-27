@@ -2,7 +2,7 @@
 #[macro_export]
 macro_rules! cstr_to_string {
     ($stri:expr, $ret_val:expr) => {
-        match CString::from_raw($stri).to_str() {
+        match ::std::ffi::CString::from_raw($stri).to_str() {
             Ok(a) => a.to_string(),
             Err(e) => {
                 ::log::error!("Failed decoding {}: {}", stringify!($stri), e);

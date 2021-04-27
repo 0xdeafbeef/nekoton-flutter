@@ -1,9 +1,8 @@
-use ed25519_dalek::PublicKey;
 use nekoton::core::keystore::KeyStore;
 use nekoton::core::models::Expiration;
 use nekoton::core::ton_wallet::TransferAction;
 use nekoton::crypto::{
-    DerivedKeySignParams, DerivedKeySigner, EncryptedKey, EncryptedKeyPassword, EncryptedKeySigner,
+    DerivedKeySignParams, DerivedKeySigner, EncryptedKeyPassword, EncryptedKeySigner,
     UnsignedMessage,
 };
 use nekoton::helpers::abi::create_comment_payload;
@@ -11,12 +10,15 @@ use nekoton::transport::models::ContractState;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use tokio::time::Duration;
-use ton_block::{MsgAddress, MsgAddressInt};
+use ton_block::MsgAddressInt;
 
-use crate::loge;
 use crate::match_option;
 use crate::wrappers::ton_wallet::SendError::TransportError;
-use crate::TonWallet;
+
+use crate::{GqlTransport, TonWalletSubscription};
+use nekoton::transport::Transport;
+use std::sync::Arc;
+use tokio::sync::Mutex;
 
 mod ffi;
 
@@ -26,17 +28,17 @@ pub enum SignData {
     Encrypted(EncryptedKeyPassword),
 }
 
-pub async fn send(
-    keystore: &KeyStore,
+pub async fn send_inner(
+    keystore: Arc<Mutex<KeyStore>>,
     keystore_type: SignData,
     to: MsgAddressInt,
-    ammount: u64,
-    wallet: &TonWallet,
+    amount: u64,
+    ton_wallet: Arc<TonWalletSubscription>,
+    transport: Arc<GqlTransport>,
     comment: Option<String>,
 ) -> Result<(), SendError> {
-    let wallet_g = wallet.wallet.read().await;
-    let transport = &wallet.transport;
-    let mut ton_wallet = wallet_g.clone();
+    let mut ton_wallet = ton_wallet.inner.clone();
+    let transport = transport.inner.clone();
 
     let state = match transport.get_contract_state(ton_wallet.address()).await? {
         ContractState::NotExists => {
@@ -49,16 +51,11 @@ pub async fn send(
     let comment = comment
         .map(|x| match_option!(create_comment_payload(&x)))
         .flatten();
-    let prepare_transfer_data = ton_wallet.prepare_transfer(
-        &state,
-        to,
-        ammount,
-        false,
-        comment,
-        Expiration::Timeout(60),
-    )?;
+    let prepare_transfer_data =
+        ton_wallet.prepare_transfer(&state, to, amount, false, comment, Expiration::Timeout(60))?;
+    let keystore = &*keystore.lock().await;
     if let TransferAction::DeployFirst = prepare_transfer_data {
-        deploy(&keystore, &keystore_type, &mut ton_wallet).await?;
+        deploy(keystore, &keystore_type, &mut ton_wallet).await?;
     }
     let mut message = match prepare_transfer_data {
         TransferAction::DeployFirst => {
@@ -69,7 +66,7 @@ pub async fn send(
 
     while let Err(e) = tokio::time::timeout(
         Duration::from_secs(60),
-        sign_and_send(keystore, &keystore_type, &mut ton_wallet, &mut message),
+        sign_and_send(&keystore, &keystore_type, &mut ton_wallet, &mut message),
     )
     .await
     {
@@ -88,25 +85,18 @@ async fn get_balance(wallet: &mut nekoton::core::ton_wallet::TonWallet) -> Resul
 
 async fn sign_and_send(
     keystore: &KeyStore,
-    keystoreType: &SignData,
+    keystore_type: &SignData,
     ton_wallet: &mut nekoton::core::ton_wallet::TonWallet,
     message: &mut Box<dyn UnsignedMessage>,
 ) -> Result<(), SendError> {
     message.refresh_timeout();
-    let signature = match keystoreType {
-        SignData::Derived(a) => {
-            keystore
-                .sign::<DerivedKeySigner>(message.hash(), a.clone())
-                .await
-        }
-        SignData::Encrypted(a) => {
-            keystore
-                .sign::<EncryptedKeySigner>(message.hash(), a.clone())
-                .await
-        }
+    let hash = message.hash();
+    let signature = match keystore_type {
+        SignData::Derived(a) => keystore.sign::<DerivedKeySigner>(hash, a.clone()).await,
+        SignData::Encrypted(a) => keystore.sign::<EncryptedKeySigner>(hash, a.clone()).await,
     }
     .map_err(|e| {
-        log::error!("Failed signgning: {}", e);
+        log::error!("Failed singing: {}", e);
         SendError::SignError
     })?;
     let singed = message.sign(&signature).map_err(|e| {
@@ -146,10 +136,10 @@ impl From<anyhow::Error> for SendError {
 
 pub async fn deploy(
     keystore: &KeyStore,
-    keystoreType: &SignData,
+    keystore_type: &SignData,
     wallet: &mut nekoton::core::ton_wallet::TonWallet,
 ) -> Result<(), SendError> {
     let mut deploy = wallet.prepare_deploy(Expiration::Timeout(60))?;
 
-    sign_and_send(keystore, keystoreType, wallet, &mut deploy).await
+    sign_and_send(keystore, keystore_type, wallet, &mut deploy).await
 }

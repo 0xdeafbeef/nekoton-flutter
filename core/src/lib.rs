@@ -2,14 +2,16 @@ mod external;
 mod ffi;
 mod wrappers;
 
+mod context;
+mod global;
 pub(crate) mod macros;
 
 use serde::{Deserialize, Serialize};
-use std::ffi::{CStr, CString};
-use std::os::raw::{c_char, c_int, c_longlong, c_uchar, c_uint};
+use std::ffi::CStr;
+use std::os::raw::{c_char, c_int, c_longlong, c_uint};
 use std::sync::Arc;
 
-use anyhow::{Error, Result};
+use anyhow::Result;
 use ed25519_dalek::PublicKey;
 use tokio::sync::RwLock;
 
@@ -22,43 +24,22 @@ use nekoton::transport::Transport;
 use crate::external::GqlConnection;
 use crate::ffi::IntoDart;
 use crate::wrappers::native_signer;
-use android_logger::{Config, FilterBuilder};
-use log::Level;
+
+use global::*;
+
+use nekoton::core::keystore::KeyStore;
 use nekoton::core::ton_wallet::compute_address;
-use once_cell::sync::Lazy;
-use tokio::task::JoinHandle;
-
-static RUNTIME_: Lazy<std::io::Result<tokio::runtime::Runtime>> =
-    Lazy::new(|| tokio::runtime::Runtime::new());
-
-#[macro_export]
-macro_rules! get_runtime {
-    () => {
-        match crate::RUNTIME_.as_ref() {
-            Ok(a) => {
-                // android_logger::init_once(Config::default().with_min_level(Level::Trace));
-                a
-            }
-            Err(e) => {
-                log::error!("Failed getting tokio runtime: {}", e);
-                return ExitCode::FailedToCreateRuntime;
-            }
-        }
-    };
-}
-
-pub struct CoreState {}
 
 pub struct Runtime {}
 
 impl Runtime {
     pub fn new() -> Result<Self> {
-        android_logger::init_once(
-            Config::default()
-                .with_min_level(Level::Info)
-                .with_tag("mytag")
+        ::android_logger::init_once(
+            ::android_logger::Config::default()
+                .with_min_level(::log::Level::Info)
+                .with_tag("nekoton")
                 .with_filter(
-                    FilterBuilder::new()
+                    android_logger::FilterBuilder::new()
                         .parse("ntbindings=debug,reqwest=debug")
                         .build(),
                 ),
@@ -68,13 +49,20 @@ impl Runtime {
     }
 }
 
+// #[derive(Clone)]
 // struct TaskManager<T> {
-//     tasks: Vec<JoinHandle<T>>,
+//     tasks: Arc<Mutex<Vec<JoinHandle<T>>>>,
 // }
 //
-// impl Drop for TaskManager<T> {
+// impl<T> Drop for TaskManager<T> {
 //     fn drop(&mut self) {
-//         let _handle = tokio!().enter();
+//         let _handle = match RUNTIME_.as_ref() {
+//             Ok(a) => a.enter(),
+//             Err(e) => {
+//                 log::error!("No runtime: {}", e);
+//                 return;
+//             }
+//         };
 //         for task in &self.tasks {
 //             task.abort();
 //         }
@@ -139,28 +127,38 @@ impl GqlTransport {
     }
 }
 
+#[no_mangle]
+pub unsafe extern "C" fn create_context(
+    params: TransportParams,
+    public_key: *const c_char,
+    contract_type: ContractType,
+) -> ExitCode {
+    let transport = match create_gql_transport(params) {
+        None => return ExitCode::InvalidUrl,
+        Some(a) => Arc::new(a),
+    };
+    let wallet = get_runtime!().block_on(subscribe_to_ton_wallet(
+        public_key,
+        contract_type,
+        transport,
+    ));
+    if let Err(e) = wallet {
+        return e;
+    }
+    ExitCode::Ok
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn create_keystore() -> ExitCode {}
+
 #[repr(C)]
 pub struct TransportParams {
     pub url: *mut c_char,
 }
 
-#[no_mangle]
-pub unsafe extern "C" fn create_gql_transport(
-    params: TransportParams,
-    gql_transport: *mut *const GqlTransport,
-) -> ExitCode {
-    let url = match CStr::from_ptr(params.url).to_str() {
-        Ok(url) => url,
-        Err(_) => return ExitCode::InvalidUrl,
-    };
-
-    match GqlConnection::new(url) {
-        Ok(connection) => {
-            *gql_transport = Box::into_raw(Box::new(GqlTransport::new(connection)));
-            ExitCode::Ok
-        }
-        Err(_) => ExitCode::InvalidUrl,
-    }
+unsafe fn create_gql_transport(params: TransportParams) -> Option<GqlTransport> {
+    let url = CStr::from_ptr(params.url).to_str().ok()?;
+    GqlConnection::new(url).map(|x| GqlTransport::new(x)).ok()
 }
 
 #[no_mangle]
@@ -172,61 +170,31 @@ pub unsafe extern "C" fn delete_gql_transport(gql_transport: *mut GqlTransport) 
     ExitCode::Ok
 }
 
-#[no_mangle]
-pub unsafe extern "C" fn subscribe_to_ton_wallet(
-    gql_transport: *mut GqlTransport,
+pub async fn subscribe_to_ton_wallet(
     public_key: *const c_char,
     contract_type: ContractType,
-    subscription_port: c_longlong,
-    result_port: c_longlong,
-) -> ExitCode {
-    if gql_transport.is_null() {
-        return ExitCode::TransportIsNotInitialized;
-    }
-
+    transport: Arc<GqlTransport>,
+) -> Result<TonWalletSubscription, ExitCode> {
     let public_key = match read_public_key(public_key) {
         Ok(key) => key,
-        Err(_) => return ExitCode::InvalidPublicKey,
+        Err(_) => return Err(ExitCode::InvalidPublicKey),
     };
     let contract_type = contract_type.into();
 
-    let handler = Arc::new(TonWalletSubscriptionHandler::new(subscription_port));
-    let result_port = ffi::SendPort::new(result_port);
-
-    let transport = (*gql_transport).inner.clone();
-
-    get_runtime!().spawn(async move {
-        log::info!(
-            "address: {}",
-            compute_address(&public_key, contract_type, 0).to_string()
-        );
-        match ton_wallet::TonWallet::subscribe(transport, public_key, contract_type, handler).await
-        {
-            Ok(new_subscription) => {
-                let mut wallet = new_subscription.clone();
-                let subscription = Box::into_raw(Box::new(TonWalletSubscription {
-                    inner: new_subscription,
-                }));
-                let token = tokio::spawn(async move {
-                    log::info!("Started refresh loop");
-                    loop {
-                        loge!(wallet.refresh().await);
-                        tokio::time::sleep(tokio::time::Duration::from_secs(5)).await;
-                    }
-                });
-
-                result_port.post((ExitCode::Ok, subscription));
-            }
-            Err(_) => {
-                result_port.post((
-                    ExitCode::FailedToSubscribeToTonWallet,
-                    std::ptr::null::<TonWalletSubscription>(),
-                ));
-            }
+    log::info!(
+        "address: {}",
+        compute_address(&public_key, contract_type, 0).to_string()
+    );
+    match ton_wallet::TonWallet::subscribe(transport, public_key, contract_type, handler).await {
+        Ok(new_subscription) => {
+            let mut wallet = new_subscription.clone();
+            let wallet_subscription = TonWalletSubscription {
+                inner: new_subscription,
+            };
+            Ok(wallet_subscription)
         }
-    });
-
-    ExitCode::Ok
+        Err(_) => Err(ExitCode::FailedToSubscribeToTonWallet),
+    }
 }
 
 #[no_mangle]
@@ -238,6 +206,7 @@ pub unsafe extern "C" fn delete_subscription(subscription: *mut TonWalletSubscri
     ExitCode::Ok
 }
 
+#[derive(Clone)]
 pub struct TonWalletSubscription {
     inner: ton_wallet::TonWallet,
 }
@@ -370,14 +339,17 @@ pub enum ExitCode {
     TransportIsNotInitialized,
     SubscriptionIsNotInitialized,
     FailedToSubscribeToTonWallet,
+    FailedToCreateKeystore,
 
     InvalidUrl,
     InvalidPublicKey,
 
     BadPassword,
-    BadKeystore,
+    BadKeystoreData,
     BadSignData,
     BadWallet,
+    BadComment,
+    BadAddress,
 }
 
 impl IntoDart for ExitCode {

@@ -1,6 +1,14 @@
+use serde::{Deserialize, Serialize};
 use std::ffi::CString;
 use std::mem::ManuallyDrop;
 use std::os::raw::{c_char, c_longlong, c_uchar, c_void};
+
+/// cbindgen:ignore
+#[derive(Deserialize, Serialize)]
+pub enum StringResult {
+    Ok(String),
+    Error(String),
+}
 
 /// cbindgen:ignore
 #[repr(i32)]

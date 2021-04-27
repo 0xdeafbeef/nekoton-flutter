@@ -2,6 +2,7 @@ use anyhow::Result;
 
 use nekoton::external;
 
+#[derive(Clone)]
 pub struct GqlConnection {
     url: reqwest::Url,
     client: reqwest::Client,

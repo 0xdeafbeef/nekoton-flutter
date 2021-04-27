@@ -1,10 +1,7 @@
 mod ffi;
 
-use nekoton::crypto::{
-    DerivedKeySigner, EncryptedKey, EncryptedKeySigner, Signature, Signer, SignerStorage,
-};
+use nekoton::crypto::{DerivedKeySigner, EncryptedKeySigner, Signature};
 
-use crate::TonWallet;
 use anyhow;
 use anyhow::Error;
 use async_trait::async_trait;
@@ -101,13 +98,4 @@ async fn sign_legacy_inner(
             },
         )
         .await
-}
-
-pub async fn sign_labs(
-    keystore: &KeyStore,
-    password: String,
-    key: &PublicKey,
-    data: &[u8],
-) -> Result<Signature, Error> {
-    todo!()
 }
