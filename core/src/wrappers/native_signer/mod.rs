@@ -1,8 +1,8 @@
-mod ffi;
+pub mod ffi;
 
 use nekoton::crypto::{DerivedKeySigner, EncryptedKeySigner, Signature};
 
-use anyhow;
+
 use anyhow::Error;
 use async_trait::async_trait;
 use ed25519_dalek::PublicKey;

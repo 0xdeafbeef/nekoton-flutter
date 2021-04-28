@@ -1,23 +1,24 @@
+use std::sync::Arc;
+
 use nekoton::core::keystore::KeyStore;
 use nekoton::core::models::Expiration;
 use nekoton::core::ton_wallet::TransferAction;
 use nekoton::crypto::{
-    DerivedKeySignParams, DerivedKeySigner, EncryptedKeyPassword, EncryptedKeySigner,
+    DerivedKeySigner, DerivedKeySignParams, EncryptedKeyPassword, EncryptedKeySigner,
     UnsignedMessage,
 };
 use nekoton::helpers::abi::create_comment_payload;
 use nekoton::transport::models::ContractState;
+use nekoton::transport::Transport;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
+
 use tokio::time::Duration;
 use ton_block::MsgAddressInt;
 
+use crate::{GqlTransport, TonWalletSubscription};
 use crate::match_option;
 use crate::wrappers::ton_wallet::SendError::TransportError;
-
-use crate::{GqlTransport, TonWalletSubscription};
-use nekoton::transport::Transport;
-use std::sync::Arc;
 use tokio::sync::Mutex;
 
 mod ffi;
@@ -39,7 +40,7 @@ pub async fn send_inner(
 ) -> Result<(), SendError> {
     let mut ton_wallet = ton_wallet.inner.clone();
     let transport = transport.inner.clone();
-
+    tokio::runtime::Builder::new_current_thread();
     let state = match transport.get_contract_state(ton_wallet.address()).await? {
         ContractState::NotExists => {
             log::error!("Contract doesn't exist");
@@ -53,9 +54,9 @@ pub async fn send_inner(
         .flatten();
     let prepare_transfer_data =
         ton_wallet.prepare_transfer(&state, to, amount, false, comment, Expiration::Timeout(60))?;
-    let keystore = &*keystore.lock().await;
+    let keystore = keystore.lock().await;
     if let TransferAction::DeployFirst = prepare_transfer_data {
-        deploy(keystore, &keystore_type, &mut ton_wallet).await?;
+        deploy(&keystore, &keystore_type, &mut ton_wallet).await?;
     }
     let mut message = match prepare_transfer_data {
         TransferAction::DeployFirst => {
@@ -68,9 +69,9 @@ pub async fn send_inner(
         Duration::from_secs(60),
         sign_and_send(&keystore, &keystore_type, &mut ton_wallet, &mut message),
     )
-    .await
+        .await
     {
-        ()
+
     }
     Ok(())
 }
@@ -95,10 +96,10 @@ async fn sign_and_send(
         SignData::Derived(a) => keystore.sign::<DerivedKeySigner>(hash, a.clone()).await,
         SignData::Encrypted(a) => keystore.sign::<EncryptedKeySigner>(hash, a.clone()).await,
     }
-    .map_err(|e| {
-        log::error!("Failed singing: {}", e);
-        SendError::SignError
-    })?;
+        .map_err(|e| {
+            log::error!("Failed singing: {}", e);
+            SendError::SignError
+        })?;
     let singed = message.sign(&signature).map_err(|e| {
         log::error!("Failed signing: {}", e);
         SendError::SignError
@@ -117,7 +118,7 @@ async fn sign_and_send(
 }
 
 #[derive(Error, Debug)]
-enum SendError {
+pub enum SendError {
     #[error("transport error")]
     TransportError(String),
     #[error("Constract doesn't exist")]

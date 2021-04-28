@@ -1,3 +1,27 @@
+use std::ffi::CStr;
+use std::os::raw::{c_char, c_int, c_longlong, c_uint};
+use std::sync::Arc;
+
+use anyhow::Result;
+use ed25519_dalek::PublicKey;
+
+use nekoton::core::models::{AccountState, PendingTransaction, Transaction, TransactionsBatchInfo};
+use nekoton::core::ton_wallet;
+use nekoton::core::ton_wallet::compute_address;
+use nekoton::transport::gql;
+use nekoton::transport::Transport;
+use serde::{Deserialize, Serialize};
+use tokio::sync::RwLock;
+use tokio::time::Duration;
+
+
+
+use crate::context::{Context, TaskManager};
+use crate::external::GqlConnection;
+use crate::ffi::IntoDart;
+use crate::wrappers::native_signer;
+use crate::wrappers::native_signer::NativeStorage;
+
 mod external;
 mod ffi;
 mod wrappers;
@@ -5,30 +29,6 @@ mod wrappers;
 mod context;
 mod global;
 pub(crate) mod macros;
-
-use serde::{Deserialize, Serialize};
-use std::ffi::CStr;
-use std::os::raw::{c_char, c_int, c_longlong, c_uint};
-use std::sync::Arc;
-
-use anyhow::Result;
-use ed25519_dalek::PublicKey;
-use tokio::sync::RwLock;
-
-use crate::wrappers::native_signer::NativeStorage;
-use nekoton::core::models::{AccountState, PendingTransaction, Transaction, TransactionsBatchInfo};
-use nekoton::core::ton_wallet;
-use nekoton::transport::gql;
-use nekoton::transport::Transport;
-
-use crate::external::GqlConnection;
-use crate::ffi::IntoDart;
-use crate::wrappers::native_signer;
-
-use global::*;
-
-use nekoton::core::keystore::KeyStore;
-use nekoton::core::ton_wallet::compute_address;
 
 pub struct Runtime {}
 
@@ -49,25 +49,6 @@ impl Runtime {
     }
 }
 
-// #[derive(Clone)]
-// struct TaskManager<T> {
-//     tasks: Arc<Mutex<Vec<JoinHandle<T>>>>,
-// }
-//
-// impl<T> Drop for TaskManager<T> {
-//     fn drop(&mut self) {
-//         let _handle = match RUNTIME_.as_ref() {
-//             Ok(a) => a.enter(),
-//             Err(e) => {
-//                 log::error!("No runtime: {}", e);
-//                 return;
-//             }
-//         };
-//         for task in &self.tasks {
-//             task.abort();
-//         }
-//     }
-// }
 
 #[no_mangle]
 pub unsafe extern "C" fn create_storage(
@@ -132,24 +113,37 @@ pub unsafe extern "C" fn create_context(
     params: TransportParams,
     public_key: *const c_char,
     contract_type: ContractType,
+    subscription_port: c_longlong,
+    keystore_data: *mut c_char,
+    context_ffi: *mut  *mut Context,
 ) -> ExitCode {
+    let manager = TaskManager::default();
+
     let transport = match create_gql_transport(params) {
         None => return ExitCode::InvalidUrl,
         Some(a) => Arc::new(a),
     };
-    let wallet = get_runtime!().block_on(subscribe_to_ton_wallet(
+    let wallet = match get_runtime!().block_on(subscribe_to_ton_wallet(
+        manager.clone(),
         public_key,
         contract_type,
-        transport,
-    ));
-    if let Err(e) = wallet {
-        return e;
-    }
+        transport.inner.clone(),
+        subscription_port,
+    )) {
+        Ok(a) => { a }
+        Err(e) => { return e; }
+    };
+    let keystore = match get_runtime!().block_on(crate::wrappers::native_signer::ffi::create_keystore(keystore_data)) {
+        Ok(a) => { a }
+        Err(e) => { return e; }
+    };
+    let context =
+        Box::new(Context::new(wallet, transport, keystore, manager));
+
+    *context_ffi = Box::into_raw(context);
     ExitCode::Ok
 }
 
-#[no_mangle]
-pub unsafe extern "C" fn create_keystore() -> ExitCode {}
 
 #[repr(C)]
 pub struct TransportParams {
@@ -158,7 +152,7 @@ pub struct TransportParams {
 
 unsafe fn create_gql_transport(params: TransportParams) -> Option<GqlTransport> {
     let url = CStr::from_ptr(params.url).to_str().ok()?;
-    GqlConnection::new(url).map(|x| GqlTransport::new(x)).ok()
+    GqlConnection::new(url).map(GqlTransport::new).ok()
 }
 
 #[no_mangle]
@@ -171,9 +165,11 @@ pub unsafe extern "C" fn delete_gql_transport(gql_transport: *mut GqlTransport) 
 }
 
 pub async fn subscribe_to_ton_wallet(
+    manager: TaskManager,
     public_key: *const c_char,
     contract_type: ContractType,
-    transport: Arc<GqlTransport>,
+    transport: Arc<dyn Transport>,
+    subscription_port: c_longlong,
 ) -> Result<TonWalletSubscription, ExitCode> {
     let public_key = match read_public_key(public_key) {
         Ok(key) => key,
@@ -185,12 +181,21 @@ pub async fn subscribe_to_ton_wallet(
         "address: {}",
         compute_address(&public_key, contract_type, 0).to_string()
     );
+    let handler = Arc::new(TonWalletSubscriptionHandler::new(subscription_port));
     match ton_wallet::TonWallet::subscribe(transport, public_key, contract_type, handler).await {
         Ok(new_subscription) => {
             let mut wallet = new_subscription.clone();
             let wallet_subscription = TonWalletSubscription {
                 inner: new_subscription,
             };
+            let handle =
+                tokio::spawn(async move {
+                    loop {
+                        wallet.refresh().await;
+                        tokio::time::sleep(Duration::from_secs(10)).await;
+                    }
+                });
+            manager.track(handle);
             Ok(wallet_subscription)
         }
         Err(_) => Err(ExitCode::FailedToSubscribeToTonWallet),
@@ -248,7 +253,7 @@ impl ton_wallet::TonWalletSubscriptionHandler for TonWalletSubscriptionHandler {
                 pending_transaction,
                 transaction,
             })
-            .expect("oops"),
+                .expect("oops"),
         );
     }
 
@@ -278,7 +283,7 @@ impl ton_wallet::TonWalletSubscriptionHandler for TonWalletSubscriptionHandler {
                     batch_info,
                 }
             })
-            .expect("oops"),
+                .expect("oops"),
         );
     }
 }
@@ -343,6 +348,8 @@ pub enum ExitCode {
 
     InvalidUrl,
     InvalidPublicKey,
+
+    NoContextProvided,
 
     BadPassword,
     BadKeystoreData,

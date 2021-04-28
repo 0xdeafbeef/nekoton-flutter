@@ -1,26 +1,32 @@
-use std::ffi::CString;
+
 use std::os::raw::c_char;
 use std::str::FromStr;
-
-use crate::ffi::StringResult;
-use crate::global::{get_keystore, get_transport, get_wallet};
-use crate::ExitCode;
+use std::sync::Arc;
 
 use ton_block::MsgAddressInt;
 
-use crate::wrappers::ton_wallet::{send_inner, SignData};
 use crate::{cstr_to_string, get_runtime, ok_or_ret};
+use crate::context::Context;
+use crate::ExitCode;
+use crate::ffi::StringResult;
+use crate::wrappers::ton_wallet::{send_inner, SignData};
 
 pub unsafe extern "C" fn send(
+    ctx: *mut Context,
     sign_data: *mut c_char,
     answer_port: crate::ffi::SendPort,
     comment: *mut c_char,
     to: *mut c_char,
     amount: libc::c_ulonglong,
 ) -> ExitCode {
+    if ctx.is_null() {
+        return ExitCode::NoContextProvided;
+    }
+
     if sign_data.is_null() {
         return ExitCode::BadSignData;
     }
+    let context: Arc<_> = Box::from_raw(ctx).into();
     let comment = if comment.is_null() {
         None
     } else {
@@ -34,7 +40,7 @@ pub unsafe extern "C" fn send(
     let to = cstr_to_string!(to, ExitCode::BadAddress);
     let to = ok_or_ret!(MsgAddressInt::from_str(&to), ExitCode::BadAddress);
 
-    send_ffi(answer_port, sign_data, to, amount, comment)
+    send_ffi(answer_port, sign_data, to, amount, comment, context)
 }
 
 fn send_ffi(
@@ -43,12 +49,12 @@ fn send_ffi(
     to: MsgAddressInt,
     amount: u64,
     comment: Option<String>,
+    context: Arc<Context>,
 ) -> ExitCode {
     let _rt = get_runtime!().enter();
-    tokio::spawn(async move {
-        let keystore = get_keystore().await;
-        let wallet = get_wallet().await;
-        let transport = get_transport().await;
+    let (keystore, wallet, transport) = (context.keystore.clone(), context.wallet_state.clone(), context.transport.clone());
+
+    context.spawn(async move {
         let res = send_inner(
             keystore,
             keystore_type,
@@ -58,7 +64,7 @@ fn send_ffi(
             transport,
             comment,
         )
-        .await;
+            .await;
         let data = match res {
             Ok(_) => StringResult::Ok("".into()),
             Err(e) => StringResult::Error(e.to_string()),
