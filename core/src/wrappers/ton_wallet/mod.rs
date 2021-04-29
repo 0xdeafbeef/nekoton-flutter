@@ -4,7 +4,7 @@ use nekoton::core::keystore::KeyStore;
 use nekoton::core::models::Expiration;
 use nekoton::core::ton_wallet::TransferAction;
 use nekoton::crypto::{
-    DerivedKeySigner, DerivedKeySignParams, EncryptedKeyPassword, EncryptedKeySigner,
+    DerivedKeySignParams, DerivedKeySigner, EncryptedKeyPassword, EncryptedKeySigner,
     UnsignedMessage,
 };
 use nekoton::helpers::abi::create_comment_payload;
@@ -16,12 +16,14 @@ use thiserror::Error;
 use tokio::time::Duration;
 use ton_block::MsgAddressInt;
 
-use crate::{GqlTransport, TonWalletSubscription};
 use crate::match_option;
 use crate::wrappers::ton_wallet::SendError::TransportError;
+use crate::{GqlTransport, TonWalletSubscription};
 use tokio::sync::Mutex;
 
 mod ffi;
+pub use ffi::send;
+use tokio::time::error::Elapsed;
 
 #[derive(Serialize, Deserialize)]
 pub enum SignData {
@@ -29,7 +31,7 @@ pub enum SignData {
     Encrypted(EncryptedKeyPassword),
 }
 
-pub async fn send_inner(
+async fn send_inner(
     keystore: Arc<Mutex<KeyStore>>,
     keystore_type: SignData,
     to: MsgAddressInt,
@@ -65,13 +67,22 @@ pub async fn send_inner(
         TransferAction::Sign(a) => a,
     };
 
-    while let Err(e) = tokio::time::timeout(
-        Duration::from_secs(60),
-        sign_and_send(&keystore, &keystore_type, &mut ton_wallet, &mut message),
-    )
-        .await
-    {
-
+    //todo do it n times?
+    loop {
+        let res = tokio::time::timeout(
+            Duration::from_secs(60),
+            sign_and_send(&keystore, &keystore_type, &mut ton_wallet, &mut message),
+        )
+        .await;
+        match res {
+            Ok(a) => {
+                if let Err(e) = a {
+                    log::error!("Failed sending: {}", e);
+                    continue;
+                }
+            }
+            Err(_) => continue,
+        }
     }
     Ok(())
 }
@@ -96,10 +107,10 @@ async fn sign_and_send(
         SignData::Derived(a) => keystore.sign::<DerivedKeySigner>(hash, a.clone()).await,
         SignData::Encrypted(a) => keystore.sign::<EncryptedKeySigner>(hash, a.clone()).await,
     }
-        .map_err(|e| {
-            log::error!("Failed singing: {}", e);
-            SendError::SignError
-        })?;
+    .map_err(|e| {
+        log::error!("Failed singing: {}", e);
+        SendError::SignError
+    })?;
     let singed = message.sign(&signature).map_err(|e| {
         log::error!("Failed signing: {}", e);
         SendError::SignError

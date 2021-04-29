@@ -14,8 +14,6 @@ use serde::{Deserialize, Serialize};
 use tokio::sync::RwLock;
 use tokio::time::Duration;
 
-
-
 use crate::context::{Context, TaskManager};
 use crate::external::GqlConnection;
 use crate::ffi::IntoDart;
@@ -29,7 +27,7 @@ mod wrappers;
 mod context;
 mod global;
 pub(crate) mod macros;
-
+pub use crate::wrappers::send;
 pub struct Runtime {}
 
 impl Runtime {
@@ -49,7 +47,6 @@ impl Runtime {
     }
 }
 
-
 #[no_mangle]
 pub unsafe extern "C" fn create_storage(
     data: *const c_char,
@@ -60,13 +57,13 @@ pub unsafe extern "C" fn create_storage(
     }
     let data = match CStr::from_ptr(data).to_str() {
         Ok(a) => a,
-        Err(e) => {
+        Err(_) => {
             return ExitCode::InvalidUrl;
         }
     };
     let storage = match native_signer::NativeStorage::new(data) {
         Ok(a) => a,
-        Err(e) => {
+        Err(_) => {
             return ExitCode::InvalidUrl;
         }
     };
@@ -115,7 +112,7 @@ pub unsafe extern "C" fn create_context(
     contract_type: ContractType,
     subscription_port: c_longlong,
     keystore_data: *mut c_char,
-    context_ffi: *mut  *mut Context,
+    context_ffi: *mut *mut Context,
 ) -> ExitCode {
     let manager = TaskManager::default();
 
@@ -130,20 +127,24 @@ pub unsafe extern "C" fn create_context(
         transport.inner.clone(),
         subscription_port,
     )) {
-        Ok(a) => { a }
-        Err(e) => { return e; }
+        Ok(a) => a,
+        Err(e) => {
+            return e;
+        }
     };
-    let keystore = match get_runtime!().block_on(crate::wrappers::native_signer::ffi::create_keystore(keystore_data)) {
-        Ok(a) => { a }
-        Err(e) => { return e; }
+    let keystore = match get_runtime!().block_on(
+        crate::wrappers::native_signer::ffi::create_keystore(keystore_data),
+    ) {
+        Ok(a) => a,
+        Err(e) => {
+            return e;
+        }
     };
-    let context =
-        Box::new(Context::new(wallet, transport, keystore, manager));
+    let context = Box::new(Context::new(wallet, transport, keystore, manager));
 
     *context_ffi = Box::into_raw(context);
     ExitCode::Ok
 }
-
 
 #[repr(C)]
 pub struct TransportParams {
@@ -188,14 +189,15 @@ pub async fn subscribe_to_ton_wallet(
             let wallet_subscription = TonWalletSubscription {
                 inner: new_subscription,
             };
-            let handle =
-                tokio::spawn(async move {
-                    loop {
-                        wallet.refresh().await;
-                        tokio::time::sleep(Duration::from_secs(10)).await;
+            let handle = tokio::spawn(async move {
+                loop {
+                    if let Err(e) = wallet.refresh().await {
+                        log::error!("Failed refreshing: {}", e);
                     }
-                });
-            manager.track(handle);
+                    tokio::time::sleep(Duration::from_secs(10)).await;
+                }
+            });
+            manager.track(handle).await;
             Ok(wallet_subscription)
         }
         Err(_) => Err(ExitCode::FailedToSubscribeToTonWallet),
@@ -253,7 +255,7 @@ impl ton_wallet::TonWalletSubscriptionHandler for TonWalletSubscriptionHandler {
                 pending_transaction,
                 transaction,
             })
-                .expect("oops"),
+            .expect("oops"),
         );
     }
 
@@ -283,7 +285,7 @@ impl ton_wallet::TonWalletSubscriptionHandler for TonWalletSubscriptionHandler {
                     batch_info,
                 }
             })
-                .expect("oops"),
+            .expect("oops"),
         );
     }
 }

@@ -1,20 +1,20 @@
-
-use std::os::raw::c_char;
+use std::os::raw::{c_char, c_longlong};
 use std::str::FromStr;
 use std::sync::Arc;
 
 use ton_block::MsgAddressInt;
 
-use crate::{cstr_to_string, get_runtime, ok_or_ret};
 use crate::context::Context;
-use crate::ExitCode;
 use crate::ffi::StringResult;
 use crate::wrappers::ton_wallet::{send_inner, SignData};
+use crate::ExitCode;
+use crate::{cstr_to_string, get_runtime, ok_or_ret};
 
+#[no_mangle]
 pub unsafe extern "C" fn send(
     ctx: *mut Context,
     sign_data: *mut c_char,
-    answer_port: crate::ffi::SendPort,
+    answer_port: c_longlong,
     comment: *mut c_char,
     to: *mut c_char,
     amount: libc::c_ulonglong,
@@ -44,7 +44,7 @@ pub unsafe extern "C" fn send(
 }
 
 fn send_ffi(
-    port: crate::ffi::SendPort,
+    port: c_longlong,
     keystore_type: SignData,
     to: MsgAddressInt,
     amount: u64,
@@ -52,7 +52,11 @@ fn send_ffi(
     context: Arc<Context>,
 ) -> ExitCode {
     let _rt = get_runtime!().enter();
-    let (keystore, wallet, transport) = (context.keystore.clone(), context.wallet_state.clone(), context.transport.clone());
+    let (keystore, wallet, transport) = (
+        context.keystore.clone(),
+        context.wallet_state.clone(),
+        context.transport.clone(),
+    );
 
     context.spawn(async move {
         let res = send_inner(
@@ -64,11 +68,12 @@ fn send_ffi(
             transport,
             comment,
         )
-            .await;
+        .await;
         let data = match res {
             Ok(_) => StringResult::Ok("".into()),
             Err(e) => StringResult::Error(e.to_string()),
         };
+        let port = crate::ffi::SendPort::new(port);
         port.post(serde_json::to_string(&data).unwrap());
     });
     ExitCode::Ok

@@ -58,21 +58,28 @@ class NekotonBindings {
   late final _wait_ptr = _lookup<ffi.NativeFunction<_c_wait>>('wait');
   late final _dart_wait _wait = _wait_ptr.asFunction<_dart_wait>();
 
-  int create_gql_transport(
+  int create_context(
     TransportParams params,
-    ffi.Pointer<ffi.Pointer<GqlTransport>> gql_transport,
+    ffi.Pointer<ffi.Int8> public_key,
+    int contract_type,
+    int subscription_port,
+    ffi.Pointer<ffi.Int8> keystore_data,
+    ffi.Pointer<ffi.Pointer<Context>> context_ffi,
   ) {
-    return _create_gql_transport(
+    return _create_context(
       params,
-      gql_transport,
+      public_key,
+      contract_type,
+      subscription_port,
+      keystore_data,
+      context_ffi,
     );
   }
 
-  late final _create_gql_transport_ptr =
-      _lookup<ffi.NativeFunction<_c_create_gql_transport>>(
-          'create_gql_transport');
-  late final _dart_create_gql_transport _create_gql_transport =
-      _create_gql_transport_ptr.asFunction<_dart_create_gql_transport>();
+  late final _create_context_ptr =
+      _lookup<ffi.NativeFunction<_c_create_context>>('create_context');
+  late final _dart_create_context _create_context =
+      _create_context_ptr.asFunction<_dart_create_context>();
 
   int delete_gql_transport(
     ffi.Pointer<GqlTransport> gql_transport,
@@ -88,28 +95,6 @@ class NekotonBindings {
   late final _dart_delete_gql_transport _delete_gql_transport =
       _delete_gql_transport_ptr.asFunction<_dart_delete_gql_transport>();
 
-  int subscribe_to_ton_wallet(
-    ffi.Pointer<GqlTransport> gql_transport,
-    ffi.Pointer<ffi.Int8> public_key,
-    int contract_type,
-    int subscription_port,
-    int result_port,
-  ) {
-    return _subscribe_to_ton_wallet(
-      gql_transport,
-      public_key,
-      contract_type,
-      subscription_port,
-      result_port,
-    );
-  }
-
-  late final _subscribe_to_ton_wallet_ptr =
-      _lookup<ffi.NativeFunction<_c_subscribe_to_ton_wallet>>(
-          'subscribe_to_ton_wallet');
-  late final _dart_subscribe_to_ton_wallet _subscribe_to_ton_wallet =
-      _subscribe_to_ton_wallet_ptr.asFunction<_dart_subscribe_to_ton_wallet>();
-
   int delete_subscription(
     ffi.Pointer<TonWalletSubscription> subscription,
   ) {
@@ -123,6 +108,27 @@ class NekotonBindings {
           'delete_subscription');
   late final _dart_delete_subscription _delete_subscription =
       _delete_subscription_ptr.asFunction<_dart_delete_subscription>();
+
+  int send(
+    ffi.Pointer<Context> ctx,
+    ffi.Pointer<ffi.Int8> sign_data,
+    int answer_port,
+    ffi.Pointer<ffi.Int8> comment,
+    ffi.Pointer<ffi.Int8> to,
+    int amount,
+  ) {
+    return _send(
+      ctx,
+      sign_data,
+      answer_port,
+      comment,
+      to,
+      amount,
+    );
+  }
+
+  late final _send_ptr = _lookup<ffi.NativeFunction<_c_send>>('send');
+  late final _dart_send _send = _send_ptr.asFunction<_dart_send>();
 }
 
 abstract class ContractType {
@@ -140,9 +146,19 @@ abstract class ExitCode {
   static const int TransportIsNotInitialized = 3;
   static const int SubscriptionIsNotInitialized = 4;
   static const int FailedToSubscribeToTonWallet = 5;
-  static const int InvalidUrl = 6;
-  static const int InvalidPublicKey = 7;
+  static const int FailedToCreateKeystore = 6;
+  static const int InvalidUrl = 7;
+  static const int InvalidPublicKey = 8;
+  static const int NoContextProvided = 9;
+  static const int BadPassword = 10;
+  static const int BadKeystoreData = 11;
+  static const int BadSignData = 12;
+  static const int BadWallet = 13;
+  static const int BadComment = 14;
+  static const int BadAddress = 15;
 }
+
+class Context extends ffi.Opaque {}
 
 class GqlTransport extends ffi.Opaque {}
 
@@ -187,14 +203,22 @@ typedef _dart_wait = int Function(
   int send_port,
 );
 
-typedef _c_create_gql_transport = ffi.Int32 Function(
+typedef _c_create_context = ffi.Int32 Function(
   TransportParams params,
-  ffi.Pointer<ffi.Pointer<GqlTransport>> gql_transport,
+  ffi.Pointer<ffi.Int8> public_key,
+  ffi.Int32 contract_type,
+  ffi.Int64 subscription_port,
+  ffi.Pointer<ffi.Int8> keystore_data,
+  ffi.Pointer<ffi.Pointer<Context>> context_ffi,
 );
 
-typedef _dart_create_gql_transport = int Function(
+typedef _dart_create_context = int Function(
   TransportParams params,
-  ffi.Pointer<ffi.Pointer<GqlTransport>> gql_transport,
+  ffi.Pointer<ffi.Int8> public_key,
+  int contract_type,
+  int subscription_port,
+  ffi.Pointer<ffi.Int8> keystore_data,
+  ffi.Pointer<ffi.Pointer<Context>> context_ffi,
 );
 
 typedef _c_delete_gql_transport = ffi.Int32 Function(
@@ -205,26 +229,28 @@ typedef _dart_delete_gql_transport = int Function(
   ffi.Pointer<GqlTransport> gql_transport,
 );
 
-typedef _c_subscribe_to_ton_wallet = ffi.Int32 Function(
-  ffi.Pointer<GqlTransport> gql_transport,
-  ffi.Pointer<ffi.Int8> public_key,
-  ffi.Int32 contract_type,
-  ffi.Int64 subscription_port,
-  ffi.Int64 result_port,
-);
-
-typedef _dart_subscribe_to_ton_wallet = int Function(
-  ffi.Pointer<GqlTransport> gql_transport,
-  ffi.Pointer<ffi.Int8> public_key,
-  int contract_type,
-  int subscription_port,
-  int result_port,
-);
-
 typedef _c_delete_subscription = ffi.Int32 Function(
   ffi.Pointer<TonWalletSubscription> subscription,
 );
 
 typedef _dart_delete_subscription = int Function(
   ffi.Pointer<TonWalletSubscription> subscription,
+);
+
+typedef _c_send = ffi.Int32 Function(
+  ffi.Pointer<Context> ctx,
+  ffi.Pointer<ffi.Int8> sign_data,
+  ffi.Int64 answer_port,
+  ffi.Pointer<ffi.Int8> comment,
+  ffi.Pointer<ffi.Int8> to,
+  ffi.Uint64 amount,
+);
+
+typedef _dart_send = int Function(
+  ffi.Pointer<Context> ctx,
+  ffi.Pointer<ffi.Int8> sign_data,
+  int answer_port,
+  ffi.Pointer<ffi.Int8> comment,
+  ffi.Pointer<ffi.Int8> to,
+  int amount,
 );

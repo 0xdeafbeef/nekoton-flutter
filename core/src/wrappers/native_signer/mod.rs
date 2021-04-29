@@ -1,11 +1,9 @@
 pub mod ffi;
 
-use nekoton::crypto::{DerivedKeySigner, EncryptedKeySigner, Signature};
-
+use nekoton::crypto::{DerivedKeySigner, EncryptedKeySigner};
 
 use anyhow::Error;
 use async_trait::async_trait;
-use ed25519_dalek::PublicKey;
 use nekoton::core::keystore::KeyStore;
 use nekoton::external::Storage;
 use std::collections::HashMap;
@@ -80,22 +78,4 @@ pub async fn open_storage(data: &str) -> Result<KeyStore, Error> {
         .await?;
 
     Ok(keystore)
-}
-
-async fn sign_legacy_inner(
-    keystore: &KeyStore,
-    password: String,
-    key: &PublicKey,
-    data: &[u8],
-) -> Result<Signature, Error> {
-    use nekoton::crypto::EncryptedKeyPassword;
-    keystore
-        .sign::<EncryptedKeySigner>(
-            data,
-            EncryptedKeyPassword {
-                public_key: *key,
-                password: password.into(),
-            },
-        )
-        .await
 }
