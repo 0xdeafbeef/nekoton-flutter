@@ -29,169 +29,26 @@ class _Nekoton {
 }
 
 class NekotonIsolate {
-  final SendPort connectPort;
+  late WalletContext ctx;
 
-  NekotonIsolate.fromConnectPort(this.connectPort);
-
-  Future<void> wait(int seconds) async {
-    final ReceivePort callbackPort = ReceivePort();
-    connectPort.send(callbackPort.sendPort);
-
-    Completer<void> done = new Completer<void>();
-    callbackPort.listen((message) {
-      if (message is SendPort) {
-        log("Got connection message");
-        message.send(CmdWait(seconds, callbackPort.sendPort));
-      } else {
-        log("Finished waiting");
-        done.complete();
-      }
-    });
-
-    return done.future;
+  NekotonIsolate(String url, String pubkey, nt.ContractType contract_type,
+      String keystoreData) {
+    ctx = WalletContext(url, pubkey, contract_type, keystoreData);
   }
 
-  Future<TonWalletSubscription> subscribe(
-      String publicKey, int contractType) async {
-    final ReceivePort callbackPort = ReceivePort();
-    connectPort.send(callbackPort.sendPort);
+  Future<void> send_tons(
+      int amount, String password, String to, String? comment) async {
+    ReceivePort isolateToMainStream = ReceivePort();
 
-    final ReceivePort notificationPort = ReceivePort();
-
-    Completer<TonWalletSubscription> done =
-        new Completer<TonWalletSubscription>();
-    callbackPort.listen((message) {
-      if (message is SendPort) {
-        log("Got connection message");
-        message.send(
-            CmdSubscribe(publicKey, contractType, notificationPort.sendPort));
-      } else if (message is int) {
-        log("Finished subscription");
-        done.complete(TonWalletSubscription(notificationPort, message));
-      }
-    });
-
-    return done.future;
-  }
-
-  static Future<NekotonIsolate> spawn() async {
-    final receiveServer = ReceivePort();
-    await Isolate.spawn(_startNekotonIsolate, [receiveServer.sendPort]);
-    final connectPort = await receiveServer.first as SendPort;
-    return NekotonIsolate.fromConnectPort(connectPort);
-  }
-}
-
-void _startNekotonIsolate(List args) {
-  final sendPort = args[0] as SendPort;
-
-  final server = _RunningNekotonServer();
-  sendPort.send(server.portToOpenConnection);
-}
-
-class _RunningNekotonServer {
-  final NekotonServer server;
-  final ReceivePort connectPort = ReceivePort();
-  int _counter = 0;
-
-  SendPort get portToOpenConnection => connectPort.sendPort;
-
-  _RunningNekotonServer() : server = NekotonServer() {
-    final subscription = connectPort.listen((message) {
-      if (message is SendPort) {
-        final receiveForConnection =
-            ReceivePort('nekoton channel #${_counter++}');
-
-        message.send(receiveForConnection.sendPort);
-        final channel = IsolateChannel(receiveForConnection, message);
-
-        log("Starting serve");
-        server.serve(channel);
-      }
-    });
-
-    server.done.then((_) {
-      subscription.cancel();
-      connectPort.close();
-    });
-  }
-}
-
-abstract class NekotonServer {
-  factory NekotonServer() {
-    return _NekotonServerImplementation();
-  }
-
-  Future<void> get done;
-
-  void serve(StreamChannel<Object?> channel);
-
-  Future<void> shutdown();
-}
-
-class _NekotonServerImplementation implements NekotonServer {
-  final Runtime runtime;
-  final Transport transport;
-
-  bool _isShuttingDown = false;
-  final Completer<void> _done = Completer();
-
-  _NekotonServerImplementation()
-      : runtime = Runtime(),
-        transport = Transport("https://main.ton.dev/graphql");
-
-  @override
-  Future<void> get done => _done.future;
-
-  @override
-  void serve(StreamChannel<Object?> channel) {
-    if (_isShuttingDown) {
-      throw StateError('Cannot add new channels after shutdown() was called');
+    Pointer<Int8> ffi_comment;
+    if (comment != null) {
+      ffi_comment = comment.toNativeUtf8().cast();
+    } else {
+      ffi_comment = Pointer.fromAddress(0); //todo use some native code
     }
-
-    final subscription = channel.stream.listen((data) async {
-      if (data is CmdWait) {
-        await runtime.wait(data.seconds);
-        channel.sink.add(true);
-      }
-      if (data is CmdSubscribe) {
-        channel.sink.add(await subscribe(data));
-      }
-      if (data is String) {
-        log("lolkek");
-      }
-    });
-
-    done.then((value) => subscription.cancel());
-
-    // TODO: add connection
-  }
-
-  Future<int> subscribe(CmdSubscribe cmd) async {
-    final resultPort = ReceivePort();
-
-    final resultCode = _Nekoton.bindings.subscribe_to_ton_wallet(
-        transport._handle,
-        cmd.publicKey.toNativeUtf8().cast(),
-        cmd.contractType,
-        cmd.notificationPort.nativePort,
-        resultPort.sendPort.nativePort);
-    if (resultCode != nt.ExitCode.Ok) {
-      throw Exception("Failed to initiate subscription to ton wallet");
-    }
-
-    final subscriptionResult = await resultPort.first as List;
-    if (subscriptionResult[0] as int != nt.ExitCode.Ok) {
-      throw Exception("Failed to subscribe to ton wallet");
-    }
-
-    return subscriptionResult[1];
-  }
-
-  @override
-  Future<void> shutdown() {
-    _isShuttingDown = true;
-    return done;
+    _Nekoton.bindings.send(ctx._handle, sign_data, isolateToMainStream., ffi_comment,
+        to.toNativeUtf8().cast(), amount);
+    {}
   }
 }
 
@@ -228,57 +85,40 @@ class Runtime {
   }
 }
 
-class Transport {
-  late Pointer<nt.GqlTransport> _handle;
-
-  Transport(String url) {
-    Pointer<nt.TransportParams> params = calloc();
-    Pointer<Pointer<nt.GqlTransport>> transportOut = calloc();
-
-    params.ref.url = url.toNativeUtf8().cast();
-
-    final success =
-        _Nekoton.bindings.create_gql_transport(params.ref, transportOut) ==
-            nt.ExitCode.Ok;
-    if (success) {
-      _handle = transportOut.value;
-    }
-
-    calloc.free(params.ref.url);
-    calloc.free(params);
-    calloc.free(transportOut);
-
-    if (!success) {
-      throw Exception("Failed to create transport");
-    }
-  }
-
-  void delete() {
-    if (_Nekoton.bindings.delete_gql_transport(_handle) != nt.ExitCode.Ok) {
-      throw Exception("Failed to delete transport");
-    }
-  }
+enum ContractType {
+  SafeMultisig,
+  SafeMultisig24h,
+  SetcodeMultisig,
+  Surf,
+  WalletV3,
 }
 
-class TonWalletSubscription {
-  late int _handle;
+class WalletContext {
+  late Pointer<nt.Context> _handle;
   late ReceivePort _notificationPort;
 
-  TonWalletSubscription(this._notificationPort, this._handle);
+  WalletContext(String url, String pubkey, nt.ContractType contract_type,
+      String keystoreData) {
+    Pointer<nt.TransportParams> params = calloc();
+    params.ref.url = url.toNativeUtf8().cast();
+    int contractType = contract_type as int;
+    Pointer<Pointer<nt.Context>> ContexOut = calloc();
+    int res = _Nekoton.bindings.create_context(
+        params.ref,
+        pubkey.toNativeUtf8().cast(),
+        contractType,
+        this._notificationPort.sendPort.nativePort,
+        keystoreData.toNativeUtf8().cast(),
+        ContexOut);
 
-  Stream<int> get balance {
-    return _notificationPort.cast();
-  }
-
-  Stream<String> get transactions {
-    return _notificationPort.cast();
-  }
-
-  void delete() {
-    final handle = Pointer<nt.TonWalletSubscription>.fromAddress(_handle);
-    final resultCode = _Nekoton.bindings.delete_subscription(handle);
-    if (resultCode != nt.ExitCode.Ok) {
-      throw Exception("Failed to delete ton wallet subscription");
+    if (res == nt.ExitCode.Ok) {
+      _handle = ContexOut.value;
+    } else {
+      throw Exception('failed to create context with code $res');
     }
+  }
+
+  Stream<String> get update {
+    return _notificationPort.cast();
   }
 }

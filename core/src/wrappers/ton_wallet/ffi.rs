@@ -26,7 +26,7 @@ pub unsafe extern "C" fn send(
     if sign_data.is_null() {
         return ExitCode::BadSignData;
     }
-    let context: Arc<_> = Box::from_raw(ctx).into();
+    let context = Box::from_raw(ctx).into();
     let comment = if comment.is_null() {
         None
     } else {

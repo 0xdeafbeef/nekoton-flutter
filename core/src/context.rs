@@ -5,9 +5,9 @@ use nekoton::core::keystore::KeyStore;
 use tokio::sync::Mutex;
 use tokio::task::JoinHandle;
 
-use crate::{ExitCode, GqlTransport, TonWalletSubscription};
 use crate::get_runtime;
 use crate::global::RUNTIME_;
+use crate::{ExitCode, GqlTransport, TonWalletSubscription};
 
 #[derive(Clone)]
 pub struct Context {
@@ -33,9 +33,10 @@ impl Context {
     }
 
     pub fn spawn<F>(&self, future: F) -> ExitCode
-        where
-            F: Future + Send + 'static,
-            F: Future<Output=()> + Send + 'static {
+    where
+        F: Future + Send + 'static,
+        F: Future<Output = ()> + Send + 'static,
+    {
         let e = get_runtime!().handle();
         let h = e.spawn(future);
         e.block_on(self.manager.track(h));
@@ -50,7 +51,10 @@ pub struct TaskManager {
 
 impl Drop for TaskManager {
     fn drop(&mut self) {
-        let e = RUNTIME_.as_ref().expect("Drop can't be called, when no features are spawned").handle();
+        let e = RUNTIME_
+            .as_ref()
+            .expect("Drop can't be called, when no features are spawned")
+            .handle();
         let tasks = self.tasks.clone();
         e.block_on(async move {
             let tasks = tasks.lock().await;

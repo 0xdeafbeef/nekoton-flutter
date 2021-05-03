@@ -81,6 +81,19 @@ class NekotonBindings {
   late final _dart_create_context _create_context =
       _create_context_ptr.asFunction<_dart_create_context>();
 
+  int delete_context(
+    ffi.Pointer<Context> context,
+  ) {
+    return _delete_context(
+      context,
+    );
+  }
+
+  late final _delete_context_ptr =
+      _lookup<ffi.NativeFunction<_c_delete_context>>('delete_context');
+  late final _dart_delete_context _delete_context =
+      _delete_context_ptr.asFunction<_dart_delete_context>();
+
   int delete_gql_transport(
     ffi.Pointer<GqlTransport> gql_transport,
   ) {
@@ -219,6 +232,14 @@ typedef _dart_create_context = int Function(
   int subscription_port,
   ffi.Pointer<ffi.Int8> keystore_data,
   ffi.Pointer<ffi.Pointer<Context>> context_ffi,
+);
+
+typedef _c_delete_context = ffi.Int32 Function(
+  ffi.Pointer<Context> context,
+);
+
+typedef _dart_delete_context = int Function(
+  ffi.Pointer<Context> context,
 );
 
 typedef _c_delete_gql_transport = ffi.Int32 Function(

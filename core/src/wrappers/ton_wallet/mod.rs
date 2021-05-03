@@ -23,7 +23,6 @@ use tokio::sync::Mutex;
 
 mod ffi;
 pub use ffi::send;
-use tokio::time::error::Elapsed;
 
 #[derive(Serialize, Deserialize)]
 pub enum SignData {
@@ -79,6 +78,8 @@ async fn send_inner(
                 if let Err(e) = a {
                     log::error!("Failed sending: {}", e);
                     continue;
+                } else {
+                    break;
                 }
             }
             Err(_) => continue,

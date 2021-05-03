@@ -1,6 +1,7 @@
 import 'dart:developer';
 
 import 'package:flutter/material.dart';
+import 'package:nekoton/bindings.dart';
 import 'package:nekoton/core.dart';
 
 void main() {
@@ -31,7 +32,7 @@ class MyHomePage extends StatefulWidget {
 
 class _MyHomePageState extends State<MyHomePage> {
   String _text = '';
-  TonWalletSubscription? _subscription;
+  Context? context;
   late NekotonIsolate core;
 
   void _subscribe() async {

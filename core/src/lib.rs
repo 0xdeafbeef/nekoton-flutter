@@ -146,6 +146,15 @@ pub unsafe extern "C" fn create_context(
     ExitCode::Ok
 }
 
+#[no_mangle]
+pub unsafe extern "C" fn delete_context(context: *mut Context) -> ExitCode {
+    if context.is_null() {
+        return ExitCode::NoContextProvided;
+    }
+    Box::from_raw(context);
+    ExitCode::Ok
+}
+
 #[repr(C)]
 pub struct TransportParams {
     pub url: *mut c_char,
@@ -222,6 +231,20 @@ struct TonWalletSubscriptionHandler {
     port: ffi::SendPort,
 }
 
+#[derive(Serialize, Deserialize)]
+enum OnUpdate {
+    OnMessageSent(OnMessageSent),
+    OnTransactionsFound(OnTransactionsFound),
+    OnMessageExpired(PendingTransaction),
+    OnStateChanged(AccountState),
+}
+
+impl OnUpdate {
+    fn prepare(&self) -> String {
+        serde_json::to_string(self).unwrap()
+    }
+}
+
 #[derive(Deserialize, Serialize)]
 pub struct OnMessageSent {
     pending_transaction: PendingTransaction,
@@ -251,11 +274,11 @@ impl ton_wallet::TonWalletSubscriptionHandler for TonWalletSubscriptionHandler {
         // log::debug!("{:?} {:?}", &pending_transaction, &transaction);
         log::debug!("on_message_sent");
         self.port.post(
-            serde_json::to_string(&OnMessageSent {
+            OnUpdate::OnMessageSent(OnMessageSent {
                 pending_transaction,
                 transaction,
             })
-            .expect("oops"),
+            .prepare(),
         );
     }
 
@@ -263,12 +286,13 @@ impl ton_wallet::TonWalletSubscriptionHandler for TonWalletSubscriptionHandler {
         // log::debug!("{:?}", &pending_transaction);
         log::debug!("on_message_expired");
         self.port
-            .post(serde_json::to_string(&pending_transaction).expect("oops"));
+            .post(OnUpdate::OnMessageExpired(pending_transaction).prepare());
     }
 
     fn on_state_changed(&self, new_state: AccountState) {
         log::debug!("State changed");
-        self.port.post(new_state.balance);
+        self.port
+            .post(OnUpdate::OnStateChanged(new_state).prepare());
     }
 
     fn on_transactions_found(
@@ -279,13 +303,11 @@ impl ton_wallet::TonWalletSubscriptionHandler for TonWalletSubscriptionHandler {
         // log::debug!("{:?} {:?}", &transactions, &batch_info);
         log::debug!("on_transactions_found");
         self.port.post(
-            serde_json::to_string(&{
-                OnTransactionsFound {
-                    transactions,
-                    batch_info,
-                }
+            OnUpdate::OnTransactionsFound(OnTransactionsFound {
+                transactions,
+                batch_info,
             })
-            .expect("oops"),
+            .prepare(),
         );
     }
 }
