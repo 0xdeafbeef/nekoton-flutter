@@ -122,6 +122,81 @@ class NekotonBindings {
   late final _dart_delete_subscription _delete_subscription =
       _delete_subscription_ptr.asFunction<_dart_delete_subscription>();
 
+  int add_key(
+    ffi.Pointer<KeyStoreWrapper> keystore,
+    ffi.Pointer<ffi.Int8> key_input,
+    ffi.Pointer<ffi.Int8> key_name,
+  ) {
+    return _add_key(
+      keystore,
+      key_input,
+      key_name,
+    );
+  }
+
+  late final _add_key_ptr = _lookup<ffi.NativeFunction<_c_add_key>>('add_key');
+  late final _dart_add_key _add_key = _add_key_ptr.asFunction<_dart_add_key>();
+
+  int remove_key(
+    ffi.Pointer<KeyStoreWrapper> keystore,
+    ffi.Pointer<ffi.Int8> pubkey,
+  ) {
+    return _remove_key(
+      keystore,
+      pubkey,
+    );
+  }
+
+  late final _remove_key_ptr =
+      _lookup<ffi.NativeFunction<_c_remove_key>>('remove_key');
+  late final _dart_remove_key _remove_key =
+      _remove_key_ptr.asFunction<_dart_remove_key>();
+
+  int update_key(
+    ffi.Pointer<KeyStoreWrapper> keystore,
+    ffi.Pointer<ffi.Int8> update_input,
+  ) {
+    return _update_key(
+      keystore,
+      update_input,
+    );
+  }
+
+  late final _update_key_ptr =
+      _lookup<ffi.NativeFunction<_c_update_key>>('update_key');
+  late final _dart_update_key _update_key =
+      _update_key_ptr.asFunction<_dart_update_key>();
+
+  int export_key(
+    ffi.Pointer<KeyStoreWrapper> keystore,
+    ffi.Pointer<ffi.Int8> export_data,
+    ffi.Pointer<ffi.Pointer<ffi.Int8>> output,
+  ) {
+    return _export_key(
+      keystore,
+      export_data,
+      output,
+    );
+  }
+
+  late final _export_key_ptr =
+      _lookup<ffi.NativeFunction<_c_export_key>>('export_key');
+  late final _dart_export_key _export_key =
+      _export_key_ptr.asFunction<_dart_export_key>();
+
+  int clear_keystore(
+    ffi.Pointer<KeyStoreWrapper> keystore,
+  ) {
+    return _clear_keystore(
+      keystore,
+    );
+  }
+
+  late final _clear_keystore_ptr =
+      _lookup<ffi.NativeFunction<_c_clear_keystore>>('clear_keystore');
+  late final _dart_clear_keystore _clear_keystore =
+      _clear_keystore_ptr.asFunction<_dart_clear_keystore>();
+
   int send(
     ffi.Pointer<Context> ctx,
     ffi.Pointer<ffi.Int8> sign_data,
@@ -160,20 +235,30 @@ abstract class ExitCode {
   static const int SubscriptionIsNotInitialized = 4;
   static const int FailedToSubscribeToTonWallet = 5;
   static const int FailedToCreateKeystore = 6;
-  static const int InvalidUrl = 7;
-  static const int InvalidPublicKey = 8;
-  static const int NoContextProvided = 9;
-  static const int BadPassword = 10;
-  static const int BadKeystoreData = 11;
-  static const int BadSignData = 12;
-  static const int BadWallet = 13;
-  static const int BadComment = 14;
-  static const int BadAddress = 15;
+  static const int FailedToAddKey = 7;
+  static const int FailedToRemoveKey = 8;
+  static const int FailedToUpdateKey = 9;
+  static const int FailedToExportKey = 10;
+  static const int InvalidUrl = 11;
+  static const int InvalidPublicKey = 12;
+  static const int NullOutputPointer = 13;
+  static const int NoContextProvided = 14;
+  static const int BadPassword = 15;
+  static const int BadKeystoreData = 16;
+  static const int BadSignData = 17;
+  static const int BadWallet = 18;
+  static const int BadComment = 19;
+  static const int BadAddress = 20;
+  static const int BadCreateKeyData = 21;
+  static const int BadUpdateData = 22;
+  static const int BadExportData = 23;
 }
 
 class Context extends ffi.Opaque {}
 
 class GqlTransport extends ffi.Opaque {}
+
+class KeyStoreWrapper extends ffi.Opaque {}
 
 class NativeStorage extends ffi.Opaque {}
 
@@ -256,6 +341,58 @@ typedef _c_delete_subscription = ffi.Int32 Function(
 
 typedef _dart_delete_subscription = int Function(
   ffi.Pointer<TonWalletSubscription> subscription,
+);
+
+typedef _c_add_key = ffi.Int32 Function(
+  ffi.Pointer<KeyStoreWrapper> keystore,
+  ffi.Pointer<ffi.Int8> key_input,
+  ffi.Pointer<ffi.Int8> key_name,
+);
+
+typedef _dart_add_key = int Function(
+  ffi.Pointer<KeyStoreWrapper> keystore,
+  ffi.Pointer<ffi.Int8> key_input,
+  ffi.Pointer<ffi.Int8> key_name,
+);
+
+typedef _c_remove_key = ffi.Int32 Function(
+  ffi.Pointer<KeyStoreWrapper> keystore,
+  ffi.Pointer<ffi.Int8> pubkey,
+);
+
+typedef _dart_remove_key = int Function(
+  ffi.Pointer<KeyStoreWrapper> keystore,
+  ffi.Pointer<ffi.Int8> pubkey,
+);
+
+typedef _c_update_key = ffi.Int32 Function(
+  ffi.Pointer<KeyStoreWrapper> keystore,
+  ffi.Pointer<ffi.Int8> update_input,
+);
+
+typedef _dart_update_key = int Function(
+  ffi.Pointer<KeyStoreWrapper> keystore,
+  ffi.Pointer<ffi.Int8> update_input,
+);
+
+typedef _c_export_key = ffi.Int32 Function(
+  ffi.Pointer<KeyStoreWrapper> keystore,
+  ffi.Pointer<ffi.Int8> export_data,
+  ffi.Pointer<ffi.Pointer<ffi.Int8>> output,
+);
+
+typedef _dart_export_key = int Function(
+  ffi.Pointer<KeyStoreWrapper> keystore,
+  ffi.Pointer<ffi.Int8> export_data,
+  ffi.Pointer<ffi.Pointer<ffi.Int8>> output,
+);
+
+typedef _c_clear_keystore = ffi.Int32 Function(
+  ffi.Pointer<KeyStoreWrapper> keystore,
+);
+
+typedef _dart_clear_keystore = int Function(
+  ffi.Pointer<KeyStoreWrapper> keystore,
 );
 
 typedef _c_send = ffi.Int32 Function(

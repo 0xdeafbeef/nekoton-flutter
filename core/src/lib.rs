@@ -6,7 +6,8 @@ use anyhow::Result;
 use ed25519_dalek::PublicKey;
 
 use nekoton::core::models::{
-    ContractState, PendingTransaction, Transaction, TransactionsBatchInfo,
+    ContractState, PendingTransaction, Transaction, TransactionAdditionalInfo, TransactionWithData,
+    TransactionsBatchInfo,
 };
 use nekoton::core::ton_wallet;
 use nekoton::core::ton_wallet::compute_address;
@@ -257,7 +258,7 @@ pub struct OnMessageSent {
 
 #[derive(Deserialize, Serialize)]
 struct OnTransactionsFound {
-    transactions: Vec<Transaction>,
+    transactions: Vec<TransactionWithData<TransactionAdditionalInfo>>,
     batch_info: TransactionsBatchInfo,
 }
 
@@ -301,7 +302,7 @@ impl ton_wallet::TonWalletSubscriptionHandler for TonWalletSubscriptionHandler {
 
     fn on_transactions_found(
         &self,
-        transactions: Vec<Transaction>,
+        transactions: Vec<TransactionWithData<TransactionAdditionalInfo>>,
         batch_info: TransactionsBatchInfo,
     ) {
         // log::debug!("{:?} {:?}", &transactions, &batch_info);

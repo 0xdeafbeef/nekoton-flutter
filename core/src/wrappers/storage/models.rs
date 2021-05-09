@@ -23,7 +23,6 @@ pub enum ExportKeyData {
     Encrypted(EncryptedKeyPassword),
 }
 
-#[repr(C)]
 pub struct KeyStoreWrapper(KeyStore);
 
 impl KeyStoreWrapper {
