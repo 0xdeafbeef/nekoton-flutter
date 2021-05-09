@@ -8,7 +8,6 @@ use nekoton::crypto::{
     UnsignedMessage,
 };
 use nekoton::helpers::abi::create_comment_payload;
-use nekoton::transport::models::ContractState;
 use nekoton::transport::Transport;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
@@ -20,11 +19,12 @@ use crate::match_option;
 use crate::wrappers::ton_wallet::SendError::TransportError;
 use crate::{GqlTransport, TonWalletSubscription};
 use tokio::sync::Mutex;
-
 mod ffi;
 pub use ffi::send;
+use nekoton::transport::models::RawContractState;
 
 #[derive(Serialize, Deserialize)]
+#[serde(tag = "type")]
 pub enum SignData {
     Derived(DerivedKeySignParams),
     Encrypted(EncryptedKeyPassword),
@@ -43,11 +43,11 @@ async fn send_inner(
     let transport = transport.inner.clone();
     tokio::runtime::Builder::new_current_thread();
     let state = match transport.get_contract_state(ton_wallet.address()).await? {
-        ContractState::NotExists => {
+        RawContractState::NotExists => {
             log::error!("Contract doesn't exist");
             return Err(SendError::ContractDoesntExist); //todo should I deploy in this case?
         }
-        ContractState::Exists(a) => a.account,
+        RawContractState::Exists(a) => a.account,
     };
 
     let comment = comment
@@ -93,7 +93,7 @@ async fn get_balance(wallet: &mut nekoton::core::ton_wallet::TonWallet) -> Resul
         .refresh()
         .await
         .map_err(|e| TransportError(e.to_string()))?;
-    Ok(wallet.account_state().balance)
+    Ok(wallet.contract_state().balance)
 }
 
 async fn sign_and_send(

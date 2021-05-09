@@ -5,7 +5,9 @@ use std::sync::Arc;
 use anyhow::Result;
 use ed25519_dalek::PublicKey;
 
-use nekoton::core::models::{AccountState, PendingTransaction, Transaction, TransactionsBatchInfo};
+use nekoton::core::models::{
+    ContractState, PendingTransaction, Transaction, TransactionsBatchInfo,
+};
 use nekoton::core::ton_wallet;
 use nekoton::core::ton_wallet::compute_address;
 use nekoton::transport::gql;
@@ -17,8 +19,8 @@ use tokio::time::Duration;
 use crate::context::{Context, TaskManager};
 use crate::external::GqlConnection;
 use crate::ffi::IntoDart;
-use crate::wrappers::native_signer;
-use crate::wrappers::native_signer::NativeStorage;
+use crate::wrappers::storage;
+use crate::wrappers::storage::NativeStorage;
 
 mod external;
 mod ffi;
@@ -27,6 +29,8 @@ mod wrappers;
 mod context;
 mod global;
 pub(crate) mod macros;
+mod utills;
+
 pub use crate::wrappers::send;
 pub struct Runtime {}
 
@@ -61,7 +65,7 @@ pub unsafe extern "C" fn create_storage(
             return ExitCode::InvalidUrl;
         }
     };
-    let storage = match native_signer::NativeStorage::new(data) {
+    let storage = match storage::NativeStorage::new(data) {
         Ok(a) => a,
         Err(_) => {
             return ExitCode::InvalidUrl;
@@ -132,9 +136,9 @@ pub unsafe extern "C" fn create_context(
             return e;
         }
     };
-    let keystore = match get_runtime!().block_on(
-        crate::wrappers::native_signer::ffi::create_keystore(keystore_data),
-    ) {
+    let keystore = match get_runtime!().block_on(crate::wrappers::storage::ffi::create_keystore(
+        keystore_data,
+    )) {
         Ok(a) => a,
         Err(e) => {
             return e;
@@ -236,7 +240,7 @@ enum OnUpdate {
     OnMessageSent(OnMessageSent),
     OnTransactionsFound(OnTransactionsFound),
     OnMessageExpired(PendingTransaction),
-    OnStateChanged(AccountState),
+    OnStateChanged(ContractState),
 }
 
 impl OnUpdate {
@@ -289,7 +293,7 @@ impl ton_wallet::TonWalletSubscriptionHandler for TonWalletSubscriptionHandler {
             .post(OnUpdate::OnMessageExpired(pending_transaction).prepare());
     }
 
-    fn on_state_changed(&self, new_state: AccountState) {
+    fn on_state_changed(&self, new_state: ContractState) {
         log::debug!("State changed");
         self.port
             .post(OnUpdate::OnStateChanged(new_state).prepare());
@@ -369,9 +373,14 @@ pub enum ExitCode {
     SubscriptionIsNotInitialized,
     FailedToSubscribeToTonWallet,
     FailedToCreateKeystore,
-
+    FailedToAddKey,
+    FailedToRemoveKey,
+    FailedToUpdateKey,
+    FailedToExportKey,
     InvalidUrl,
     InvalidPublicKey,
+
+    NullOutputPointer,
 
     NoContextProvided,
 
@@ -381,6 +390,9 @@ pub enum ExitCode {
     BadWallet,
     BadComment,
     BadAddress,
+    BadCreateKeyData,
+    BadUpdateData,
+    BadExportData,
 }
 
 impl IntoDart for ExitCode {

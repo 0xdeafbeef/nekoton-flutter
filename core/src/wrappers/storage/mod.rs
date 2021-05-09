@@ -1,4 +1,5 @@
 pub mod ffi;
+mod models;
 
 use nekoton::crypto::{DerivedKeySigner, EncryptedKeySigner};
 

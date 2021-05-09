@@ -26,6 +26,17 @@ macro_rules! ok_or_ret {
     };
 }
 
+/// if `check_expr` is `true` returns `ret_value`
+#[macro_export]
+macro_rules! ffi_ensure {
+    ($check_expr:expr,$ret_value:expr, $message:literal) => {
+        if $check_expr {
+            ::log::error!("Failed with {}", $message);
+            return $ret_value;
+        }
+    };
+}
+
 ///Logs error
 #[macro_export]
 macro_rules! loge {
