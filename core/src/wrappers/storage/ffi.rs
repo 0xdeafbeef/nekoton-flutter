@@ -3,7 +3,7 @@ use std::os::raw::c_char;
 use nekoton::core::keystore::KeyStore;
 
 use super::open_storage;
-use crate::utills::ffi_mut_cast;
+use crate::utils::ffi_mut_cast;
 use crate::wrappers::storage::models::{
     CreateKeyData, ExportKeyData, KeyStoreWrapper, UpdateKeyData,
 };

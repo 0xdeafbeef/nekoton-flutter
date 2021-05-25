@@ -4,7 +4,6 @@ use std::sync::Arc;
 
 use anyhow::Result;
 use ed25519_dalek::PublicKey;
-
 use nekoton::core::models::{
     ContractState, PendingTransaction, Transaction, TransactionAdditionalInfo, TransactionWithData,
     TransactionsBatchInfo,
@@ -20,6 +19,7 @@ use tokio::time::Duration;
 use crate::context::{Context, TaskManager};
 use crate::external::GqlConnection;
 use crate::ffi::IntoDart;
+pub use crate::wrappers::send;
 use crate::wrappers::storage;
 use crate::wrappers::storage::NativeStorage;
 
@@ -30,9 +30,8 @@ mod wrappers;
 mod context;
 mod global;
 pub(crate) mod macros;
-mod utills;
+mod utils;
 
-pub use crate::wrappers::send;
 pub struct Runtime {}
 
 impl Runtime {
